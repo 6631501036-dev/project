@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Register/register.dart';
+import 'package:flutter_application_1/register/register.dart';
 
 void main() {
   runApp(MaterialApp(home: Register(),));
