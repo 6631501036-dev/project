@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/login/login.dart';
 
 class Welcome extends StatefulWidget {
   const Welcome({super.key});
@@ -17,7 +18,6 @@ class _WelcomeState extends State<Welcome> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-
               // รูปภาพวงกลม
               ClipOval(
                 child: Image.asset(
@@ -34,6 +34,10 @@ class _WelcomeState extends State<Welcome> {
               ElevatedButton(
                 onPressed: () {
                   // ไปหน้า sign in
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const Login()),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color.fromARGB(255, 149, 196, 230),
