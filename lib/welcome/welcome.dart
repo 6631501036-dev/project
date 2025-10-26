@@ -17,28 +17,13 @@ class _WelcomeState extends State<Welcome> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // ข้อความต้อนรับ
-              const Text(
-                "Welcome",
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                "Sport asset borrowed",
-                style: TextStyle(fontSize: 18, color: Colors.black87),
-              ),
-              const SizedBox(height: 30),
 
               // รูปภาพวงกลม
               ClipOval(
                 child: Image.asset(
                   'assets/image/landing.jpg', // ใช้รูปที่แนบไว้ เช่นเปลี่ยนชื่อไฟล์นี้
-                  width: 280,
-                  height: 280,
+                  width: 450,
+                  height: 450,
                   fit: BoxFit.cover,
                 ),
               ),
@@ -51,7 +36,7 @@ class _WelcomeState extends State<Welcome> {
                   // ไปหน้า sign in
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
+                  backgroundColor: const Color.fromARGB(255, 149, 196, 230),
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
@@ -60,7 +45,7 @@ class _WelcomeState extends State<Welcome> {
                     horizontal: 40,
                     vertical: 14,
                   ),
-                  elevation: 2,
+                  elevation: 5,
                 ),
                 child: const Text(
                   "Sign in",
