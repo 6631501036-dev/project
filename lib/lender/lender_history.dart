@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 // 1. Data Model
 // -----------------------------------------------------------------------------
 class HistoryRecord {
-  final String id, item, borrowDate, returnDate, student, lender, staff;
+  final String id, item, borrowDate, returnDate, student, lender, staff, status;
 
   const HistoryRecord({
     required this.id,
@@ -14,30 +14,32 @@ class HistoryRecord {
     required this.student,
     required this.lender,
     required this.staff,
+    required this.status,
   });
 }
 
 // -----------------------------------------------------------------------------
-// 2. Staff History Screen (The main view)
+// 2. Lender History Screen (Main Page)
 // -----------------------------------------------------------------------------
-class StaffHistory extends StatefulWidget {
-  const StaffHistory({super.key});
+class LenderHistory extends StatefulWidget {
+  const LenderHistory({super.key});
 
   @override
-  State<StaffHistory> createState() => _StaffHistoryState();
+  State<LenderHistory> createState() => _LenderHistoryState();
 }
 
-class _StaffHistoryState extends State<StaffHistory> {
-  // Static Data (will eventually come from a database)
+class _LenderHistoryState extends State<LenderHistory> {
+  // ตัวอย่างข้อมูล (จำลอง)
   final List<HistoryRecord> _records = const [
     HistoryRecord(
       id: "1",
-      item: "balls",
+      item: "Football",
       borrowDate: "10/11/2025",
       returnDate: "12/11/2025",
       student: "student_1",
       lender: "lender_1",
       staff: "staff_1",
+      status: "Approved",
     ),
     HistoryRecord(
       id: "2",
@@ -45,8 +47,9 @@ class _StaffHistoryState extends State<StaffHistory> {
       borrowDate: "10/11/2025",
       returnDate: "12/11/2025",
       student: "student_2",
-      lender: "lender_2",
-      staff: "-", // Indicates open/in-progress transaction
+      lender: "lender_1",
+      staff: "-",
+      status: "Disapproved",
     ),
   ];
 
@@ -56,17 +59,12 @@ class _StaffHistoryState extends State<StaffHistory> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Custom Header and Profile Section
+            // Header Section
             Container(
               width: double.infinity,
               padding: const EdgeInsets.only(top: 40, bottom: 30),
               decoration: const BoxDecoration(
-                color: Color.fromRGBO(
-                  214,
-                  237,
-                  255,
-                  1.0,
-                ), // Light Blue Background
+                color: Color.fromRGBO(214, 237, 255, 1.0), // Light Blue
               ),
               child: Column(
                 children: [
@@ -79,23 +77,22 @@ class _StaffHistoryState extends State<StaffHistory> {
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  // Profile Icon
+                  // Profile Avatar
                   const CircleAvatar(
                     radius: 40,
                     backgroundColor: Colors.black,
                     child: Icon(Icons.person, size: 50, color: Colors.white),
                   ),
                   const SizedBox(height: 16),
-                  // Staff Name
                   const Text(
-                    "John Doe (Staff)",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
+                    "John Doe (Lender)",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
             ),
 
-            // History Table Section
+            // History Table
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: _HistoryTable(records: _records),
@@ -108,7 +105,7 @@ class _StaffHistoryState extends State<StaffHistory> {
 }
 
 // -----------------------------------------------------------------------------
-// 3. Custom History Table Widget
+// 3. History Table Widget
 // -----------------------------------------------------------------------------
 class _HistoryTable extends StatelessWidget {
   final List<HistoryRecord> records;
@@ -117,7 +114,6 @@ class _HistoryTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The table is wrapped in a Container to give it the rounded white card look
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -132,7 +128,7 @@ class _HistoryTable extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Table Header
+          // Header
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             decoration: const BoxDecoration(
@@ -151,14 +147,15 @@ class _HistoryTable extends StatelessWidget {
               student: "Student",
               lender: "Lender",
               staff: "Staff",
+              status: "Status",
             ),
           ),
 
-          // Table Rows
+          // Rows
           ...records.map((r) {
             return Column(
               children: [
-                const Divider(height: 1, thickness: 1, color: Colors.black),
+                const Divider(height: 1, thickness: 1, color: Colors.black12),
                 _HistoryRow(
                   id: r.id,
                   item: r.item,
@@ -167,6 +164,7 @@ class _HistoryTable extends StatelessWidget {
                   student: r.student,
                   lender: r.lender,
                   staff: r.staff,
+                  status: r.status,
                 ),
               ],
             );
@@ -178,10 +176,10 @@ class _HistoryTable extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// 4. Custom Table Row Widget
+// 4. Single Row Widget
 // -----------------------------------------------------------------------------
 class _HistoryRow extends StatelessWidget {
-  final String id, item, borrowDate, returnDate, student, lender, staff;
+  final String id, item, borrowDate, returnDate, student, lender, staff, status;
   final bool isHeader;
 
   const _HistoryRow({
@@ -192,14 +190,29 @@ class _HistoryRow extends StatelessWidget {
     required this.student,
     required this.lender,
     required this.staff,
+    required this.status,
     this.isHeader = false,
   });
 
+  // ✅ กำหนดสีข้อความตามสถานะ
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return Colors.green;
+      case 'disapproved':
+        return Colors.red;
+      // case 'pending':
+      //   return Colors.orange;
+      default:
+        return Colors.black;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final TextStyle style = TextStyle(
+    final TextStyle baseStyle = TextStyle(
       fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-      fontSize: isHeader ? 11 : 10,
+      fontSize: isHeader ? 11 : 8, // ปรับขนาด  font
       color: Colors.black,
     );
 
@@ -208,40 +221,54 @@ class _HistoryRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ID (Small width)
           Expanded(
             flex: 1,
-            child: Text(id, style: style, textAlign: TextAlign.center),
+            child: Text(id, style: baseStyle, textAlign: TextAlign.center),
           ),
-          // Item
           Expanded(
             flex: 3,
-            child: Text(item, style: style, textAlign: TextAlign.center),
+            child: Text(item, style: baseStyle, textAlign: TextAlign.center),
           ),
-          // Borrow Date
           Expanded(
             flex: 3,
-            child: Text(borrowDate, style: style, textAlign: TextAlign.center),
+            child: Text(
+              borrowDate,
+              style: baseStyle,
+              textAlign: TextAlign.center,
+            ),
           ),
-          // Return Date
           Expanded(
             flex: 3,
-            child: Text(returnDate, style: style, textAlign: TextAlign.center),
+            child: Text(
+              returnDate,
+              style: baseStyle,
+              textAlign: TextAlign.center,
+            ),
           ),
-          // Student
           Expanded(
             flex: 3,
-            child: Text(student, style: style, textAlign: TextAlign.center),
+            child: Text(student, style: baseStyle, textAlign: TextAlign.center),
           ),
-          // Lender
           Expanded(
             flex: 3,
-            child: Text(lender, style: style, textAlign: TextAlign.center),
+            child: Text(lender, style: baseStyle, textAlign: TextAlign.center),
           ),
-          // Staff (Small width)
           Expanded(
             flex: 2,
-            child: Text(staff, style: style, textAlign: TextAlign.center),
+            child: Text(staff, style: baseStyle, textAlign: TextAlign.center),
+          ),
+
+          // ✅ Status Column with color
+          Expanded(
+            flex: 2,
+            child: Text(
+              status,
+              style: baseStyle.copyWith(
+                color: _getStatusColor(status),
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ),
         ],
       ),
