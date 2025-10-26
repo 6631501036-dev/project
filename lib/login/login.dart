@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/register2/register.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -35,6 +36,14 @@ class _LoginState extends State<Login> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Navigate to Register Page')));
+
+    // หน่วงเวลาเล็กน้อยให้เห็น SnackBar ก่อนเปลี่ยนหน้า
+    Future.delayed(const Duration(milliseconds: 500), () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const Register()),
+      );
+    });
   }
 
   @override
