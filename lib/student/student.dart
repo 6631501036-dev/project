@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'student_history.dart';
 
 class Student extends StatefulWidget {
   const Student({super.key});
@@ -75,7 +76,10 @@ class _StudentState extends State<Student> {
                 alignment: Alignment.centerLeft,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    // Navigate to history page
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const Student_history()),
+                    );
                   },
                   label: const Text('History'),
                   icon: const Icon(Icons.history_edu_rounded, color: Colors.black),
