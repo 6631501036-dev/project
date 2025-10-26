@@ -21,7 +21,7 @@ class _WelcomeState extends State<Welcome> {
               // รูปภาพวงกลม
               ClipOval(
                 child: Image.asset(
-                  'assets/image/landing.jpg', // ใช้รูปที่แนบไว้ เช่นเปลี่ยนชื่อไฟล์นี้
+                  'asset/image/landing.jpg', // ใช้รูปที่แนบไว้ เช่นเปลี่ยนชื่อไฟล์นี้
                   width: 450,
                   height: 450,
                   fit: BoxFit.cover,
