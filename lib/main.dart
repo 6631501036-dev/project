@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Register/register.dart';
+import 'package:flutter_application_1/welcome/welcome.dart';
 
 void main() {
-  runApp(MaterialApp(home: Register(),));
+  runApp(MaterialApp(
+    home: Welcome(),
+  ));
 }
 
