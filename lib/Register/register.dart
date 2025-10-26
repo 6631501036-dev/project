@@ -39,7 +39,12 @@ class _RegisterState extends State<Register> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(child: Image.asset('รูป', height: 180)),
+                Center(
+                  child: Image.asset(
+                    'assets/image/registerPic.png',
+                    height: 180,
+                  ),
+                ),
                 SizedBox(height: 30),
 
                 Text(
