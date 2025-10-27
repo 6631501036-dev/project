@@ -62,6 +62,7 @@ class _Student_historyState extends State<Student_history> {
       });
     }
   }
+
   //appbar ,background ,icon return ,icon logout
   @override
   Widget build(BuildContext context) {
@@ -91,6 +92,7 @@ class _Student_historyState extends State<Student_history> {
           : _buildBodyContent(),
     );
   }
+
   //กรอบขาว
   Widget _buildBodyContent() {
     return SingleChildScrollView(
@@ -105,7 +107,6 @@ class _Student_historyState extends State<Student_history> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 24.0),
-
               _buildProfileSection(
                 name: _studentName,
                 avatarLetter: _avatarLetter,
@@ -159,8 +160,9 @@ class _Student_historyState extends State<Student_history> {
       ],
     );
   }
-//status section
- Widget _buildStatusSection({StatusItem? item}) {
+
+  //status section 
+  Widget _buildStatusSection({StatusItem? item}) {
     Widget cardContent;
 
     if (item != null) {
@@ -197,7 +199,7 @@ class _Student_historyState extends State<Student_history> {
     } else {
       cardContent = const Center(
         child: Text(
-          'no status today', 
+          'no status today',
           style: TextStyle(color: Colors.grey),
         ),
       );
@@ -212,23 +214,22 @@ class _Student_historyState extends State<Student_history> {
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12.0),
-
           Container(
-            width: double.infinity, 
+            width: double.infinity,
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16.0),
               border: Border.all(color: const Color(0xFFEEEEEE)),
             ),
-            child: cardContent, 
+            child: cardContent,
           ),
         ],
       ),
     );
   }
-  
-  //history
+
+  //history (นี่คือเวอร์ชันเดิมที่คุณต้องการ ที่ค่อยๆ เพิ่มการ์ด)
   Widget _buildHistorySection({required List<HistoryItem> items}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -240,7 +241,6 @@ class _Student_historyState extends State<Student_history> {
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12.0),
-
           if (items.isEmpty)
             const Center(
               child: Text(
@@ -264,7 +264,8 @@ class _Student_historyState extends State<Student_history> {
       ),
     );
   }
-  //ข้อมูนใน history card
+
+  //ข้อมูลใน history card
   Widget _buildHistoryCard({required HistoryItem item}) {
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -307,6 +308,7 @@ class _Student_historyState extends State<Student_history> {
       ),
     );
   }
+
   //detailในcard history lender,returned
   Widget _buildHistoryDetails({required HistoryItem item}) {
     return Column(
