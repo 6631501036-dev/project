@@ -1,7 +1,67 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 
-class Student_history extends StatelessWidget {
+class Student_history extends StatefulWidget {
   const Student_history({super.key});
+
+  @override
+  State<Student_history> createState() => _Student_historyState();
+}
+
+class _Student_historyState extends State<Student_history> {
+  bool _isLoading = true;
+
+  String _studentName = '';
+  String _avatarLetter = '';
+  StatusItem? _pendingItem;
+  List<HistoryItem> _historyItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    // API
+
+    // จำลองการหน่วงเวลาของ API
+    await Future.delayed(const Duration(seconds: 1));
+
+    final studentName = 'S  A  R  A';
+    final avatarLetter = 'S';
+    final pendingItem = StatusItem(
+      date: '10/18/2025',
+      itemName: 'Basketball',
+      status: 'Pending',
+    );
+    final historyItems = [
+      HistoryItem(
+        item: 'Football',
+        dateRange: '10/15/2025 - 10/17/2025',
+        lender: 'lender.Doe',
+        returnedBy: 'staff.Doe',
+      ),
+      HistoryItem(
+        item: 'Volleyball',
+        dateRange: '10/10/2025 - 10/10/2025',
+        lender: 'lender.Doe',
+        returnedBy: 'staff.Doe',
+      ),
+    ];
+
+    if (mounted) {
+      // (เช็คว่า widget ยังอยู่)
+      setState(() {
+        _studentName = studentName;
+        _avatarLetter = avatarLetter;
+        _pendingItem = pendingItem;
+        _historyItems = historyItems;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,48 +85,62 @@ class Student_history extends StatelessWidget {
           ),
         ],
       ),
+      // ตรวจสอบสถานะ Loading ก่อนแสดงผล
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildBodyContent(),
+    );
+  }
 
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(30.0),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 24.0),
-                _buildProfileSection(),
-                const SizedBox(height: 24.0),
-                _buildStatusSection(),
-                const SizedBox(height: 16.0),
-                //line
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Divider(color: Color(0xFFEEEEEE)),
-                ),
-                const SizedBox(height: 16.0),
-                _buildHistorySection(),
-                const SizedBox(height: 24.0),
-              ],
-            ),
+  Widget _buildBodyContent() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30.0),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 24.0),
+
+              _buildProfileSection(
+                name: _studentName,
+                avatarLetter: _avatarLetter,
+              ),
+              const SizedBox(height: 24.0),
+              _buildStatusSection(item: _pendingItem),
+              const SizedBox(height: 16.0),
+              //line
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20.0),
+                child: Divider(color: Color(0xFFEEEEEE)),
+              ),
+              const SizedBox(height: 16.0),
+              _buildHistorySection(items: _historyItems),
+              const SizedBox(height: 24.0),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildProfileSection() {
+  //  ปรับแก้รับพารามิเตอร์ name และ avatarLetter
+  Widget _buildProfileSection({
+    required String name,
+    required String avatarLetter,
+  }) {
     return Column(
       children: [
         CircleAvatar(
           radius: 50,
           backgroundColor: Colors.grey[200],
-          child: const Text(
-            'S',
-            style: TextStyle(
+          child: Text(
+            avatarLetter,
+            style: const TextStyle(
               fontSize: 48,
               fontWeight: FontWeight.bold,
               color: Colors.black,
@@ -74,9 +148,9 @@ class Student_history extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16.0),
-        const Text(
-          'S  A  R  A',
-          style: TextStyle(
+        Text(
+          name,
+          style: const TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             letterSpacing: 6.0,
@@ -86,7 +160,7 @@ class Student_history extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusSection() {
+  Widget _buildStatusSection({StatusItem? item}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
@@ -97,40 +171,31 @@ class Student_history extends StatelessWidget {
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12.0),
-          _buildStatusCard(),
+
+          if (item != null)
+            _buildStatusCard(item: item) // ถ้ามี ก็สร้างการ์ด
+          else
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16.0),
+                border: Border.all(color: const Color(0xFFEEEEEE)),
+              ),
+              child: const Center(
+                child: Text(
+                  'No pending items.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildHistorySection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'History',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12.0),
-          _buildHistoryCard(
-            item: 'Football',
-            dateRange: '10/15/2025 - 10/17/2025',
-            details: _buildHistoryDetails(),
-          ),
-          const SizedBox(height: 12.0),
-          _buildHistoryCard(
-            item: 'Volleyball',
-            dateRange: '10/10/2025 - 10/10/2025',
-            details: _buildHistoryDetails(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusCard() {
+  Widget _buildStatusCard({required StatusItem item}) {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -145,19 +210,22 @@ class Student_history extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '10/18/2025',
+                item.date,
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Basketball',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text(
+                item.itemName,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
-          const Text(
-            'Pending',
-            style: TextStyle(
+          Text(
+            item.status,
+            style: const TextStyle(
               color: Colors.orange,
               fontWeight: FontWeight.bold,
               fontSize: 14,
@@ -168,11 +236,43 @@ class Student_history extends StatelessWidget {
     );
   }
 
-  Widget _buildHistoryCard({
-    required String item,
-    required String dateRange,
-    Widget? details,
-  }) {
+  Widget _buildHistorySection({required List<HistoryItem> items}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'History',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12.0),
+
+          if (items.isEmpty)
+            const Center(
+              child: Text(
+                'No history found.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                return _buildHistoryCard(item: items[index]);
+              },
+              separatorBuilder: (context, index) {
+                return const SizedBox(height: 12.0);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryCard({required HistoryItem item}) {
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -196,7 +296,7 @@ class Student_history extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                item,
+                item.item,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -204,36 +304,62 @@ class Student_history extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                dateRange,
+                item.dateRange,
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
             ],
           ),
-          if (details != null) details,
+          _buildHistoryDetails(item: item),
         ],
       ),
     );
   }
 
-  Widget _buildHistoryDetails() {
+  Widget _buildHistoryDetails({required HistoryItem item}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Lender', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-        const Text(
-          'lender.Doe',
-          style: TextStyle(color: Colors.black, fontSize: 14),
+        Text(
+          item.lender,
+          style: const TextStyle(color: Colors.black, fontSize: 14),
         ),
         const SizedBox(height: 4),
         Text(
           'returned',
           style: TextStyle(color: Colors.grey[600], fontSize: 12),
         ),
-        const Text(
-          'staff.Doe',
-          style: TextStyle(color: Colors.black, fontSize: 14),
+        Text(
+          item.returnedBy,
+          style: const TextStyle(color: Colors.black, fontSize: 14),
         ),
       ],
     );
   }
+}
+
+class StatusItem {
+  final String date;
+  final String itemName;
+  final String status;
+
+  StatusItem({
+    required this.date,
+    required this.itemName,
+    required this.status,
+  });
+}
+
+class HistoryItem {
+  final String item;
+  final String dateRange;
+  final String lender;
+  final String returnedBy;
+
+  HistoryItem({
+    required this.item,
+    required this.dateRange,
+    required this.lender,
+    required this.returnedBy,
+  });
 }
