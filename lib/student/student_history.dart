@@ -62,7 +62,7 @@ class _Student_historyState extends State<Student_history> {
       });
     }
   }
-
+  //appbar ,background ,icon return ,icon logout
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,7 +71,7 @@ class _Student_historyState extends State<Student_history> {
         backgroundColor: Colors.blue.shade100,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
           onPressed: () {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
@@ -91,7 +91,7 @@ class _Student_historyState extends State<Student_history> {
           : _buildBodyContent(),
     );
   }
-
+  //กรอบขาว
   Widget _buildBodyContent() {
     return SingleChildScrollView(
       child: Padding(
@@ -159,51 +159,12 @@ class _Student_historyState extends State<Student_history> {
       ],
     );
   }
+//status section
+ Widget _buildStatusSection({StatusItem? item}) {
+    Widget cardContent;
 
-  Widget _buildStatusSection({StatusItem? item}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Status',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12.0),
-
-          if (item != null)
-            _buildStatusCard(item: item) // ถ้ามี ก็สร้างการ์ด
-          else
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16.0),
-                border: Border.all(color: const Color(0xFFEEEEEE)),
-              ),
-              child: const Center(
-                child: Text(
-                  'No pending items.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusCard({required StatusItem item}) {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.0),
-        border: Border.all(color: const Color(0xFFEEEEEE)),
-      ),
-      child: Row(
+    if (item != null) {
+      cardContent = Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
@@ -232,10 +193,42 @@ class _Student_historyState extends State<Student_history> {
             ),
           ),
         ],
+      );
+    } else {
+      cardContent = const Center(
+        child: Text(
+          'no status today', 
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Status',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12.0),
+
+          Container(
+            width: double.infinity, 
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.0),
+              border: Border.all(color: const Color(0xFFEEEEEE)),
+            ),
+            child: cardContent, 
+          ),
+        ],
       ),
     );
   }
-
+  
+  //history
   Widget _buildHistorySection({required List<HistoryItem> items}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -271,7 +264,7 @@ class _Student_historyState extends State<Student_history> {
       ),
     );
   }
-
+  //ข้อมูนใน history card
   Widget _buildHistoryCard({required HistoryItem item}) {
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -314,7 +307,7 @@ class _Student_historyState extends State<Student_history> {
       ),
     );
   }
-
+  //detailในcard history lender,returned
   Widget _buildHistoryDetails({required HistoryItem item}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

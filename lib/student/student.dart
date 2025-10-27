@@ -81,7 +81,7 @@ class _StudentState extends State<Student> {
                       MaterialPageRoute(builder: (context) => const Student_history()),
                     );
                   },
-                  label: const Text('History'),
+                  label: const Text('Status & History'),
                   icon: const Icon(Icons.history_edu_rounded, color: Colors.black),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue.shade200,
