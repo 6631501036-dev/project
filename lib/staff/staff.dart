@@ -47,6 +47,14 @@ class _StaffState extends State<Staff> {
       statusColor: Colors.blue,
       isReturned: false,
     ),
+    Product(
+      id: "3",
+      name: "Tennis Racket",
+      imagePath: "asset/image/tennis.png",
+      status: "Pending",
+      statusColor: Colors.orange,
+      isReturned: false,
+    ),
   ];
 
   // Function เปลี่ยน สี ปุ่ม Return/Returned
