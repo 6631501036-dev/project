@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/lender/lender.dart';
-import 'package:flutter_application_1/register2/register.dart';
+import 'package:flutter_application_1/register/register.dart';
 // import 'package:flutter_application_1/staff/staff.dart';
 // import 'package:flutter_application_1/student/student.dart';
 
