@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/lender/lender.dart';
+import 'package:flutter_application_1/register/register.dart';
+// import 'package:flutter_application_1/staff/staff.dart';
+// import 'package:flutter_application_1/student/student.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -28,6 +32,21 @@ class _LoginState extends State<Login> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Logged in successfully!')));
+
+      // Navigator.push(
+      //   context,
+      //   MaterialPageRoute(builder: (context) => const Student()),
+      // );
+
+      // Navigator.push(
+      //   context,
+      //   MaterialPageRoute(builder: (context) => const Staff()),
+      // );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const Lender()),
+      );
     });
   }
 
@@ -35,6 +54,14 @@ class _LoginState extends State<Login> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Navigate to Register Page')));
+
+    // หน่วงเวลาเล็กน้อยให้เห็น SnackBar ก่อนเปลี่ยนหน้า
+    Future.delayed(const Duration(milliseconds: 500), () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const Register()),
+      );
+    });
   }
 
   @override
