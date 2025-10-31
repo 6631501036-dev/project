@@ -40,40 +40,101 @@ class _LenderState extends State<Lender> {
   ];
 
   void _updateLoanStatus(String id, String newStatus) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Confirmation"),
-        content: Text(
-          newStatus == "Approve"
-              ? "Are you sure you want to approve this item?"
-              : "Are you sure you want to disapprove this item?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+    if (newStatus == "Disapprove") {
+      TextEditingController reasonController = TextEditingController();
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Disapprove Confirmation"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Please provide a reason for disapproval:"),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  hintText: "Enter reason...",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                final index = _products.indexWhere((p) => p.id == id);
-                if (index != -1) {
-                  if (newStatus == "Approve") {
-                    _products[index].loanStatus = "Borrowed";
-                  } else if (newStatus == "Disable" ||
-                      newStatus == "Disapprove") {
-                    _products[index].loanStatus = "Disapproved";
-                  }
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+              ),
+              onPressed: () {
+                String reason = reasonController.text.trim();
+                if (reason.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Please enter a reason for disapproval."),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                  return;
                 }
-              });
-            },
-            child: const Text("Confirm"),
-          ),
-        ],
-      ),
-    );
+
+                Navigator.pop(context);
+                setState(() {
+                  final index = _products.indexWhere((p) => p.id == id);
+                  if (index != -1) {
+                    _products[index].loanStatus = "Disapproved";
+                    // You can store the reason somewhere if needed
+                    // e.g., _products[index].reason = reason;
+                  }
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("Item disapproved. Reason: $reason"),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              },
+              child: const Text("Confirm"),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Default confirmation for approve
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Approve Confirmation"),
+          content: const Text("Are you sure you want to approve this item?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                setState(() {
+                  final index = _products.indexWhere((p) => p.id == id);
+                  if (index != -1) {
+                    _products[index].loanStatus = "Borrowed";
+                  }
+                });
+              },
+              child: const Text("Confirm"),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
