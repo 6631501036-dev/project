@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/staff/request.dart';
-import 'staff_history.dart';
 
 // 1. Product Model to hold item data and the new return state
 class Product {
@@ -22,15 +20,14 @@ class Product {
   });
 }
 
-class Staff extends StatefulWidget {
-  const Staff({super.key});
+class Request extends StatefulWidget {
+  const Request({super.key});
 
   @override
-  State<Staff> createState() => _StaffState();
+  State<Request> createState() => _RequestState();
 }
 
-class _StaffState extends State<Staff> {
-  // Initial Product Data (Now managed in state)
+class _RequestState extends State<Request> {
   final List<Product> _products = [
     Product(
       id: "1",
@@ -95,134 +92,44 @@ class _StaffState extends State<Staff> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.black,
-        onPressed: () {
-          _showProductDialog(title: "Add Product", productName: "", id: "New");
-        },
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             children: [
               // Profile Header
               Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(top: 20, bottom: 30),
                 color: Colors.lightBlue[100],
-                padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
+                    // Back Button
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios, size: 30),
+                        color: Colors.black,
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                    // Profile Icon
                     const CircleAvatar(
                       radius: 40,
                       backgroundColor: Colors.black12,
                       child: Icon(Icons.person, size: 50, color: Colors.black),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
+                    // Staff Name
                     const Text(
                       "John Doe (Staff)",
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Stats Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: const [
-                        _StatBox(
-                          color: Colors.purple,
-                          label: "Total",
-                          value: "10",
-                        ),
-                        _StatBox(
-                          color: Colors.green,
-                          label: "Available",
-                          value: "5",
-                        ),
-                        _StatBox(
-                          color: Colors.orange,
-                          label: "Pending",
-                          value: "3",
-                        ),
-                        _StatBox(
-                          color: Colors.blue,
-                          label: "Borrowed",
-                          value: "2",
-                        ),
-                        _StatBox(
-                          color: Colors.red,
-                          label: "Disable",
-                          value: "5",
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.notifications,
-                              color: Colors.white,
-                            ),
-                            label: const Text(
-                              "Request",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const Request(),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.deepPurpleAccent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.history,
-                              color: Colors.white,
-                            ),
-                            label: const Text(
-                              "History",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const StaffHistory(),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
               ),
-
               // Product List
               Container(
                 margin: const EdgeInsets.all(8),
@@ -327,61 +234,6 @@ class _StaffState extends State<Staff> {
   }
 }
 
-// ------------------------- กล่อง Dashboard -------------------------
-class _StatBox extends StatelessWidget {
-  final Color color;
-  final String label;
-  final String value;
-
-  const _StatBox({
-    required this.color,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 80,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ------------------------- Product Row -------------------------
 class _ProductRow extends StatelessWidget {
   final String id;
@@ -412,12 +264,6 @@ class _ProductRow extends StatelessWidget {
         ? Colors.grey
         : Colors.purple.shade300;
     final String returnButtonLabel = isReturned ? "Returned" : "Return";
-
-    final Color disableButtonColor = isReturned
-        ? Colors.green
-        : Colors.red.shade400;
-    final String disableButtonLabel = isReturned ? "Enable" : "Disable";
-    final IconData disableButtonIcon = isReturned ? Icons.check : Icons.block;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -469,20 +315,6 @@ class _ProductRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _MiniActionButton(
-                  icon: Icons.edit,
-                  color: Colors.teal.shade300,
-                  label: "Edit",
-                  onPressed: onEdit,
-                ),
-                const SizedBox(height: 6),
-                _MiniActionButton(
-                  icon: disableButtonIcon,
-                  color: disableButtonColor,
-                  label: disableButtonLabel,
-                  onPressed: () => onToggleDisable(id),
-                ),
-                const SizedBox(height: 6),
                 _MiniActionButton(
                   icon: Icons.undo,
                   color: returnButtonColor,
@@ -620,43 +452,6 @@ class _ProductFormDialog extends StatelessWidget {
                         fontSize: 16,
                       ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    "Cancel",
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    "Apply",
-                    style: TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ),
               ],

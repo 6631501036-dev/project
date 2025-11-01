@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 // 1. Data Model
 // -----------------------------------------------------------------------------
 class HistoryRecord {
-  final String id, item, borrowDate, returnDate, student, lender, staff;
+  final String id, item, borrowDate, returnDate, student, lender, staff, status;
 
   const HistoryRecord({
     required this.id,
@@ -14,6 +14,7 @@ class HistoryRecord {
     required this.student,
     required this.lender,
     required this.staff,
+    required this.status,
   });
 }
 
@@ -38,6 +39,7 @@ class _StaffHistoryState extends State<StaffHistory> {
       student: "student_1",
       lender: "lender_1",
       staff: "staff_1",
+      status: "Approved",
     ),
     HistoryRecord(
       id: "2",
@@ -46,7 +48,8 @@ class _StaffHistoryState extends State<StaffHistory> {
       returnDate: "12/11/2025",
       student: "student_2",
       lender: "lender_2",
-      staff: "-", // Indicates open/in-progress transaction
+      staff: "-",
+      status: "Disapproved",
     ),
   ];
 
@@ -59,15 +62,8 @@ class _StaffHistoryState extends State<StaffHistory> {
             // Custom Header and Profile Section
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.only(top: 40, bottom: 30),
-              decoration: const BoxDecoration(
-                color: Color.fromRGBO(
-                  214,
-                  237,
-                  255,
-                  1.0,
-                ), // Light Blue Background
-              ),
+              padding: const EdgeInsets.only(top: 20, bottom: 30),
+              color: Colors.lightBlue[100],
               child: Column(
                 children: [
                   // Back Button
@@ -82,8 +78,8 @@ class _StaffHistoryState extends State<StaffHistory> {
                   // Profile Icon
                   const CircleAvatar(
                     radius: 40,
-                    backgroundColor: Colors.black,
-                    child: Icon(Icons.person, size: 50, color: Colors.white),
+                    backgroundColor: Colors.black12,
+                    child: Icon(Icons.person, size: 50, color: Colors.black),
                   ),
                   const SizedBox(height: 16),
                   // Staff Name
@@ -151,6 +147,7 @@ class _HistoryTable extends StatelessWidget {
               student: "Student",
               lender: "Lender",
               staff: "Staff",
+              status: "Status",
             ),
           ),
 
@@ -167,6 +164,7 @@ class _HistoryTable extends StatelessWidget {
                   student: r.student,
                   lender: r.lender,
                   staff: r.staff,
+                  status: r.status,
                 ),
               ],
             );
@@ -181,7 +179,7 @@ class _HistoryTable extends StatelessWidget {
 // 4. Custom Table Row Widget
 // -----------------------------------------------------------------------------
 class _HistoryRow extends StatelessWidget {
-  final String id, item, borrowDate, returnDate, student, lender, staff;
+  final String id, item, borrowDate, returnDate, student, lender, staff, status;
   final bool isHeader;
 
   const _HistoryRow({
@@ -192,14 +190,27 @@ class _HistoryRow extends StatelessWidget {
     required this.student,
     required this.lender,
     required this.staff,
+    required this.status,
     this.isHeader = false,
   });
 
+  // ✅ Function to return color based on status
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return Colors.green;
+      case 'disapproved':
+        return Colors.red;
+      default:
+        return Colors.black;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final TextStyle style = TextStyle(
+    final TextStyle baseStyle = TextStyle(
       fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-      fontSize: isHeader ? 11 : 10,
+      fontSize: isHeader ? 11 : 9,
       color: Colors.black,
     );
 
@@ -208,40 +219,61 @@ class _HistoryRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ID (Small width)
+          // ID
           Expanded(
             flex: 1,
-            child: Text(id, style: style, textAlign: TextAlign.center),
+            child: Text(id, style: baseStyle, textAlign: TextAlign.center),
           ),
           // Item
           Expanded(
             flex: 3,
-            child: Text(item, style: style, textAlign: TextAlign.center),
+            child: Text(item, style: baseStyle, textAlign: TextAlign.center),
           ),
           // Borrow Date
           Expanded(
             flex: 3,
-            child: Text(borrowDate, style: style, textAlign: TextAlign.center),
+            child: Text(
+              borrowDate,
+              style: baseStyle,
+              textAlign: TextAlign.center,
+            ),
           ),
           // Return Date
           Expanded(
             flex: 3,
-            child: Text(returnDate, style: style, textAlign: TextAlign.center),
+            child: Text(
+              returnDate,
+              style: baseStyle,
+              textAlign: TextAlign.center,
+            ),
           ),
           // Student
           Expanded(
             flex: 3,
-            child: Text(student, style: style, textAlign: TextAlign.center),
+            child: Text(student, style: baseStyle, textAlign: TextAlign.center),
           ),
           // Lender
           Expanded(
             flex: 3,
-            child: Text(lender, style: style, textAlign: TextAlign.center),
+            child: Text(lender, style: baseStyle, textAlign: TextAlign.center),
           ),
-          // Staff (Small width)
+          // Staff
           Expanded(
             flex: 2,
-            child: Text(staff, style: style, textAlign: TextAlign.center),
+            child: Text(staff, style: baseStyle, textAlign: TextAlign.center),
+          ),
+
+          // ✅ Status (color depends on value)
+          Expanded(
+            flex: 3,
+            child: Text(
+              status,
+              textAlign: TextAlign.center,
+              style: baseStyle.copyWith(
+                color: _getStatusColor(status),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
