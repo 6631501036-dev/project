@@ -63,9 +63,7 @@ class _LenderHistoryState extends State<LenderHistory> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.only(top: 40, bottom: 30),
-              decoration: const BoxDecoration(
-                color: Color.fromRGBO(214, 237, 255, 1.0), // Light Blue
-              ),
+              color: Colors.lightBlue[100],
               child: Column(
                 children: [
                   // Back Button
@@ -80,8 +78,8 @@ class _LenderHistoryState extends State<LenderHistory> {
                   // Profile Avatar
                   const CircleAvatar(
                     radius: 40,
-                    backgroundColor: Colors.black,
-                    child: Icon(Icons.person, size: 50, color: Colors.white),
+                    backgroundColor: Colors.black12,
+                    child: Icon(Icons.person, size: 50, color: Colors.black),
                   ),
                   const SizedBox(height: 16),
                   const Text(
