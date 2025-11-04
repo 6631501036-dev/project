@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'student_history.dart';
+import 'student_status.dart';
 
 class Student extends StatefulWidget {
   const Student({super.key});
@@ -39,7 +40,7 @@ class _StudentState extends State<Student> with RouteAware {
 
   Future<void> fetchAssets() async {
     try {
-      final res = await http.get(Uri.parse("http://192.168.1.6:3000/asset"));
+      final res = await http.get(Uri.parse("http://192.168.110.142:3000/asset"));
       if (res.statusCode == 200) {
         setState(() {
           equipmentList = List<Map<String, dynamic>>.from(
@@ -89,7 +90,7 @@ class _StudentState extends State<Student> with RouteAware {
 
     try {
       final res = await http.post(
-        Uri.parse("http://192.168.1.6:3000/borrower/borrow"),
+        Uri.parse("http://192.168.110.142:3000/borrower/borrow"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode(body),
       );
@@ -113,7 +114,7 @@ class _StudentState extends State<Student> with RouteAware {
   Future<void> requestReturn(int requestId, String assetName) async {
     try {
       final res = await http.put(
-        Uri.parse("http://192.168.1.6:3000/student/returnAsset/$requestId"),
+        Uri.parse("http://192.168.110.142:3000/student/returnAsset/$requestId"),
       );
 
       if (!mounted) return;
@@ -177,7 +178,7 @@ class _StudentState extends State<Student> with RouteAware {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const Student_history(),
+                            builder: (_) => const Student_status(),
                           ),
                         );
                       },
