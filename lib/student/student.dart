@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'student_history.dart';
 
 class Student extends StatefulWidget {
@@ -8,29 +10,128 @@ class Student extends StatefulWidget {
   State<Student> createState() => _StudentState();
 }
 
-class _StudentState extends State<Student> {
-  final List<Map<String, dynamic>> equipmentList = [
-    {
-      'name': 'Football',
-      'status': 'Available',
-      'image': 'asset/image/football ball.png',
-    },
-    {
-      'name': 'Basketball',
-      'status': 'Borrowed',
-      'image': 'asset/image/basketball.png',
-    },
-    {
-      'name': 'Volleyball',
-      'status': 'Pending',
-      'image': 'asset/image/volleyball.png',
-    },
-    {
-      'name': 'Badminton Shuttle',
-      'status': 'Disable',
-      'image': 'asset/image/shuttlecock.png',
-    },
-  ];
+class _StudentState extends State<Student> with RouteAware {
+  final int borrowerId = 1;
+  List<Map<String, dynamic>> equipmentList = [];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchAssets();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void didPopNext() {
+    fetchAssets();
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  Future<void> fetchAssets() async {
+    try {
+      final res = await http.get(Uri.parse("http://192.168.1.6:3000/asset"));
+      if (res.statusCode == 200) {
+        setState(() {
+          equipmentList = List<Map<String, dynamic>>.from(
+            jsonDecode(res.body)['assets'],
+          );
+        });
+      }
+    } catch (e) {
+      print("Fetch error: $e");
+    }
+  }
+
+  Future<void> confirmBorrow(int assetId, String assetName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Confirm Borrow"),
+        content: Text("Borrow $assetName?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      borrowEquipment(assetId, assetName);
+    }
+  }
+
+  Future<void> borrowEquipment(int assetId, String assetName) async {
+    final body = {
+      "borrower_id": borrowerId.toString(),
+      "asset_id": assetId.toString(),
+      "borrow_date": DateTime.now().toString().substring(0, 10),
+      "return_date": DateTime.now()
+          .add(const Duration(days: 7))
+          .toString()
+          .substring(0, 10),
+    };
+
+    try {
+      final res = await http.post(
+        Uri.parse("http://192.168.1.6:3000/borrower/borrow"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(body),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.statusCode == 200 ? "Borrow request sent ✅" : "Borrow failed ❌",
+          ),
+        ),
+      );
+
+      if (res.statusCode == 200) fetchAssets();
+    } catch (e) {
+      print("Borrow error: $e");
+    }
+  }
+
+  Future<void> requestReturn(int requestId, String assetName) async {
+    try {
+      final res = await http.put(
+        Uri.parse("http://192.168.1.6:3000/student/returnAsset/$requestId"),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            res.statusCode == 200
+                ? "Return request sent ✅"
+                : "Request return failed ❌",
+          ),
+        ),
+      );
+      if (res.statusCode == 200) fetchAssets();
+    } catch (e) {
+      print("Return request error: $e");
+    }
+  }
 
   Color getStatusColor(String status) {
     switch (status) {
@@ -40,112 +141,187 @@ class _StudentState extends State<Student> {
         return Colors.teal;
       case 'Pending':
         return Colors.orange;
-      case 'Disable':
+      case 'Disabled':
         return Colors.red;
       default:
         return Colors.black;
     }
   }
 
-  bool isBorrowEnabled(String status) => status == 'Available';
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.blue.shade100,
         title: const Text(
           'Sport Equipment',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        backgroundColor: Colors.blue.shade100,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded), // Replace with custom icon if needed
-            onPressed: () {
-              // Logout logic
-            },
-          ),
+          IconButton(icon: const Icon(Icons.logout_rounded), onPressed: () {}),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const Student_history()),
-                    );
-                  },
-                  label: const Text('Status & History'),
-                  icon: const Icon(Icons.history_edu_rounded, color: Colors.black),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade200,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+      body: RefreshIndicator(
+        onRefresh: fetchAssets,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const Student_history(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.manage_search_rounded,
+                        color: Colors.black,
+                      ),
+                      label: const Text('Status'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade200,
+                        foregroundColor: Colors.black,
+                      ),
                     ),
-                  ),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const Student_history(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.history_rounded,
+                        color: Colors.black,
+                      ),
+                      label: const Text('History'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade200,
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 10),
-              Column(
-                children: equipmentList.map((item) {
-                  return Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(item['name'],
+                const SizedBox(height: 20),
+
+                Column(
+                  children: equipmentList.map((item) {
+                    final status = item['asset_status'] ?? 'Available';
+                    final requestId = item['request_id'] ?? 0;
+                    final itemBorrowerId = item['borrower_id'] ?? 0;
+                    final returnStatus =
+                        item['return_status'] ?? 'Not Returned';
+
+                    final enableBorrow = status == 'Available';
+                    final enableReturn =
+                        status == 'Borrowed' &&
+                        itemBorrowerId == borrowerId &&
+                        returnStatus == 'Not Returned';
+                    final isReturnRequested =
+                        returnStatus == 'Requested Return';
+
+                    return Column(
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item['asset_name'] ?? '',
                                     style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500)),
-                                const SizedBox(height: 4),
-                                Text(item['status'],
-                                    style: TextStyle(
-                                        color: getStatusColor(item['status']),
-                                        fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 8),
-                                ElevatedButton(
-                                  onPressed: isBorrowEnabled(item['status'])
-                                      ? () {
-                                          // Navigate to detail page
-                                        }
-                                      : null,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isBorrowEnabled(item['status'])
-                                        ? Colors.blue
-                                        : Colors.grey.shade300,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  child: const Text('Borrow'),
-                                ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    status,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: getStatusColor(status),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ElevatedButton(
+                                    onPressed:
+                                        (enableBorrow || enableReturn) &&
+                                            !isReturnRequested
+                                        ? () {
+                                            if (enableBorrow) {
+                                              confirmBorrow(
+                                                item['asset_id'],
+                                                item['asset_name'],
+                                              );
+                                            } else if (enableReturn &&
+                                                requestId != 0) {
+                                              requestReturn(
+                                                requestId,
+                                                item['asset_name'],
+                                              );
+                                            }
+                                          }
+                                        : null,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: enableReturn
+                                          ? (isReturnRequested
+                                                ? Colors.grey
+                                                : Colors.purple)
+                                          : enableBorrow
+                                          ? Colors.blue
+                                          : Colors.grey,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      enableReturn ? "Return" : "Borrow",
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          Image.asset(item['image'], width: 80),
-                        ],
-                      ),
-                      const Divider(),
-                    ],
-                  );
-                }).toList(),
-              ),
-            ],
+                            const SizedBox(width: 12),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.asset(
+                                "assets/images/${item['image']}",
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    const Icon(Icons.broken_image, size: 60),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const Divider(),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
+
+final RouteObserver<ModalRoute<void>> routeObserver =
+    RouteObserver<ModalRoute<void>>();
