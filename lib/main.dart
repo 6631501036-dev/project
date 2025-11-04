@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/student/student.dart';
+import 'package:flutter_application_1/welcome/welcome.dart';
 
 void main() {
-  runApp(
-    MaterialApp(
-      home: Student(),
-      navigatorObservers: [routeObserver], // ✅ Required for auto-refresh
-      debugShowCheckedModeBanner: false,
-    ),
-  ); //MaterialApp
+  runApp(MaterialApp(home: Welcome()));
 }
