@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/staff/staff.dart';
+import 'package:flutter_application_1/student/student.dart';
+import 'package:http/http.dart' as http;
+
 import 'package:flutter_application_1/lender/lender.dart';
 import 'package:flutter_application_1/register/register.dart';
-// import 'package:flutter_application_1/staff/staff.dart';
-// import 'package:flutter_application_1/student/student.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -12,62 +15,93 @@ class Login extends StatefulWidget {
 }
 
 class _LoginState extends State<Login> {
-  // ตัวควบคุมช่องกรอก
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  bool _isLoading = false; // เผื่อไว้แสดงสถานะโหลดตอนกด Log in
+  Future<void> _login() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
 
-  void _login() {
+    if (username.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill in both fields")),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
-    // ตัวอย่างดีเลย์จำลองการล็อกอิน
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
+      // ⚠️ Change this to your actual local IP or server address
+      final url = Uri.parse("http://192.168.234.1:3000/login");
+
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"username": username, "password": password}),
+      );
+
       setState(() {
         _isLoading = false;
       });
 
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data["message"] ?? "Login successful")),
+        );
+
+        final role = data["role"];
+        if (role == "borrower") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const Student()),
+          );
+        } else if (role == "staff") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const Staff()),
+          );
+        } else if (role == "lender") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const Lender()),
+          );
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("Unknown user role")));
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Login failed: ${response.body}")),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Logged in successfully!')));
-
-      // Navigator.push(
-      //   context,
-      //   MaterialPageRoute(builder: (context) => const Student()),
-      // );
-
-      // Navigator.push(
-      //   context,
-      //   MaterialPageRoute(builder: (context) => const Staff()),
-      // );
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const Lender()),
-      );
-    });
+      ).showSnackBar(SnackBar(content: Text("Error: $e")));
+    }
   }
 
   void _register() {
-    ScaffoldMessenger.of(
+    Navigator.push(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Navigate to Register Page')));
-
-    // หน่วงเวลาเล็กน้อยให้เห็น SnackBar ก่อนเปลี่ยนหน้า
-    Future.delayed(const Duration(milliseconds: 500), () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const Register()),
-      );
-    });
+      MaterialPageRoute(builder: (context) => const Register()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFD9ECFF), // พื้นหลังฟ้าอ่อน
+      backgroundColor: const Color(0xFFD9ECFF),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -140,14 +174,12 @@ class _LoginState extends State<Login> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 40),
 
-                // ปุ่ม Log in และ Register
+                // Buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Log in
                     ElevatedButton(
                       onPressed: _isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
@@ -175,8 +207,6 @@ class _LoginState extends State<Login> {
                             ),
                     ),
                     const SizedBox(width: 20),
-
-                    // Register
                     ElevatedButton(
                       onPressed: _register,
                       style: ElevatedButton.styleFrom(
