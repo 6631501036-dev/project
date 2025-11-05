@@ -11,7 +11,7 @@ class Student_history extends StatefulWidget {
 }
 
 class _Student_historyState extends State<Student_history> {
-  final String baseUrl = "http://192.168.110.142:3000/api"; //ipconfig pc ของเรา
+  final String baseUrl = "http://192.168.234.1:3000/api"; //ipconfig pc ของเรา
   final String currentUserId = "1";
 
   bool _isLoading = true;
