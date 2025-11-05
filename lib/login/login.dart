@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/lender/lender.dart';
+import 'package:flutter_application_1/register/register.dart';
 import 'package:flutter_application_1/staff/staff.dart';
 import 'package:flutter_application_1/student/student.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_application_1/lender/lender.dart';
-import 'package:flutter_application_1/register/register.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -14,6 +15,7 @@ class Login extends StatefulWidget {
 }
 
 class _LoginState extends State<Login> {
+  // ตัวควบคุมช่องกรอก
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   // URL ของเซิร์ฟเวอร์ สามาเปลี่ยนได้***********************************************************อย่าลืมเปลี่ยนนะ************************************
@@ -94,16 +96,23 @@ class _LoginState extends State<Login> {
   }
 
   void _register() {
-    Navigator.push(
+    ScaffoldMessenger.of(
       context,
-      MaterialPageRoute(builder: (context) => const Register()),
-    );
+    ).showSnackBar(const SnackBar(content: Text('Navigate to Register Page')));
+
+    // หน่วงเวลาเล็กน้อยให้เห็น SnackBar ก่อนเปลี่ยนหน้า
+    Future.delayed(const Duration(milliseconds: 500), () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const Register()),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFD9ECFF),
+      backgroundColor: const Color(0xFFD9ECFF), // พื้นหลังฟ้าอ่อน
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -176,12 +185,14 @@ class _LoginState extends State<Login> {
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 40),
 
-                // Buttons
+                // ปุ่ม Log in และ Register
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // Log in
                     ElevatedButton(
                       onPressed: _isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
@@ -209,6 +220,8 @@ class _LoginState extends State<Login> {
                             ),
                     ),
                     const SizedBox(width: 20),
+
+                    // Register
                     ElevatedButton(
                       onPressed: _register,
                       style: ElevatedButton.styleFrom(
