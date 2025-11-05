@@ -40,7 +40,9 @@ class _StudentState extends State<Student> with RouteAware {
 
   Future<void> fetchAssets() async {
     try {
-      final res = await http.get(Uri.parse("http://192.168.110.142:3000/asset"));
+      final res = await http.get(
+        Uri.parse("http://192.168.110.142:3000/asset"),
+      );
       if (res.statusCode == 200) {
         setState(() {
           equipmentList = List<Map<String, dynamic>>.from(

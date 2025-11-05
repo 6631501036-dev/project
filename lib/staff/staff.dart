@@ -1,16 +1,20 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/staff/request.dart';
-import 'staff_history.dart';
+import 'package:flutter_application_1/staff/staff_history.dart';
+import 'package:flutter_application_1/staff/menu_staff.dart';
+import 'package:flutter_application_1/login/login.dart';
 
-// 1. Product Model to hold item data and the new return state
 class Product {
   final String id;
   final String name;
   final String imagePath;
   final String status;
   final Color statusColor;
-  bool
-  isReturned; // New state field to track if the item has been virtually "returned"
+  bool isReturned;
 
   Product({
     required this.id,
@@ -30,38 +34,67 @@ class Staff extends StatefulWidget {
 }
 
 class _StaffState extends State<Staff> {
-  // Initial Product Data (Now managed in state)
-  final List<Product> _products = [
-    Product(
-      id: "1",
-      name: "Balls",
-      imagePath: "asset/image/football.png",
-      status: "Available",
-      statusColor: Colors.green,
-      isReturned: true,
-    ),
-    Product(
-      id: "2",
-      name: "Basketball",
-      imagePath: "asset/image/basketball.png",
-      status: "Borrowed",
-      statusColor: Colors.blue,
-      isReturned: false,
-    ),
-  ];
+  int _selectedIndex = 0;
+  int _hoverIndex = -1;
 
-  // Function เปลี่ยน สี ปุ่ม Return/Returned
-  void _toggleReturnStatus(String id) {
-    setState(() {
-      final productIndex = _products.indexWhere((p) => p.id == id);
-      if (productIndex != -1) {
-        _products[productIndex].isReturned =
-            !_products[productIndex].isReturned;
-      }
-    });
+  List<Product> _products = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAssets();
   }
 
-  // Function เปลี่ยน สี ปุ่ม Disable/Enable
+  // ✅ ดึงข้อมูลจาก Database ผ่าน API
+  Future<void> _fetchAssets() async {
+    try {
+      final url = Uri.parse("http://192.168.234.1:3000/staff/assets");
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data["success"] == true) {
+          List<Product> loaded = [];
+          for (var a in data["assets"]) {
+            loaded.add(
+              Product(
+                id: a["asset_id"].toString(),
+                name: a["asset_name"],
+                imagePath:
+                    "http://192.168.234.1:3000${a["image"]}", // ✅ โหลดรูปจาก backend
+                status: a["asset_status"],
+                statusColor: _getStatusColor(a["asset_status"]),
+              ),
+            );
+          }
+          setState(() {
+            _products = loaded;
+          });
+        }
+      } else {
+        print("Failed to load assets: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Error fetching assets: $e");
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case "Available":
+        return Colors.green;
+      case "Pending":
+        return Colors.orange;
+      case "Borrowed":
+        return Colors.blue;
+      case "Disabled":
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  // ✅ Toggle Disable/Enable
   void _toggleDisable(String id) {
     setState(() {
       final productIndex = _products.indexWhere((p) => p.id == id);
@@ -72,41 +105,167 @@ class _StaffState extends State<Staff> {
     });
   }
 
-  // Function show pop  up เมื่อกด add กับ edit
+  // ✅ เพิ่มข้อมูลเข้า DB
+  Future<void> _addAsset(
+    String name,
+    String description,
+    File? imageFile,
+  ) async {
+    var uri = Uri.parse("http://192.168.234.1:3000/staff/addAsset");
+    var request = http.MultipartRequest("POST", uri);
+    request.fields["name"] = name;
+    request.fields["description"] = description;
+
+    if (imageFile != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath("image", imageFile.path),
+      );
+    }
+
+    var response = await request.send();
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("✅ Asset added successfully")),
+      );
+      _fetchAssets(); // โหลดข้อมูลใหม่
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("❌ Failed to add asset")));
+    }
+  }
+
+  // ✅ ฟังก์ชันลบข้อมูล
+  Future<void> _deleteAsset(String id) async {
+    try {
+      final url = Uri.parse("http://192.168.234.1:3000/staff/deleteAsset/$id");
+      final response = await http.delete(url);
+
+      if (response.statusCode == 200) {
+        final res = jsonDecode(response.body);
+        if (res["success"] == true) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("🗑️ ${res["message"]}")));
+          _fetchAssets(); // โหลดใหม่หลังลบ
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("❌ Failed: ${res["message"]}")),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("❌ Server error: ${response.statusCode}")),
+        );
+      }
+    } catch (e) {
+      print("Error deleting asset: $e");
+    }
+  }
+
   void _showProductDialog({
     required String title,
     required String productName,
     required String id,
+    bool isEdit = false,
   }) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        contentPadding: EdgeInsets.zero,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         content: _ProductFormDialog(
           title: title,
           initialProductName: productName,
           id: id,
+          onAddAsset: _addAsset,
+          isEdit: isEdit,
         ),
       ),
     );
   }
 
+  void _navigateToMenu() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MenuStaff()),
+    );
+  }
+
+  void _navigateToAdd() {
+    _showProductDialog(title: "Add Product", productName: "", id: "New");
+  }
+
+  void _navigateToHistory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const StaffHistory()),
+    );
+  }
+
+  void _logout() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const Login()),
+      (route) => false,
+    );
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+
+    switch (index) {
+      case 0:
+        _navigateToMenu();
+        break;
+      case 2:
+        _navigateToAdd();
+        break;
+      case 3:
+        _navigateToHistory();
+        break;
+      case 4:
+        _logout();
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.black,
-        onPressed: () {
-          _showProductDialog(title: "Add Product", productName: "", id: "New");
-        },
-        child: const Icon(Icons.add, color: Colors.white),
+      backgroundColor: Colors.grey[100],
+
+      // 🔹 Bottom App Bar with Hover Animation
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.lightBlue[100],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 4,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(0, Icons.sports_soccer, "Sport\nEquipment"),
+            _buildNavItem(1, Icons.refresh, "Return"),
+            _buildNavItem(2, Icons.add_circle, "Add", largeIcon: true),
+            _buildNavItem(3, Icons.history, "History"),
+            _buildNavItem(4, Icons.logout, "Logout"),
+          ],
+        ),
       ),
+
+      // 🔹 Main Body
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // Profile Header
               Container(
                 color: Colors.lightBlue[100],
                 padding: const EdgeInsets.all(16),
@@ -125,105 +284,11 @@ class _StaffState extends State<Staff> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    // Stats Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: const [
-                        _StatBox(
-                          color: Colors.purple,
-                          label: "Total",
-                          value: "10",
-                        ),
-                        _StatBox(
-                          color: Colors.green,
-                          label: "Available",
-                          value: "5",
-                        ),
-                        _StatBox(
-                          color: Colors.orange,
-                          label: "Pending",
-                          value: "3",
-                        ),
-                        _StatBox(
-                          color: Colors.blue,
-                          label: "Borrowed",
-                          value: "2",
-                        ),
-                        _StatBox(
-                          color: Colors.red,
-                          label: "Disable",
-                          value: "5",
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.notifications,
-                              color: Colors.white,
-                            ),
-                            label: const Text(
-                              "Request",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const Request(),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.deepPurpleAccent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.history,
-                              color: Colors.white,
-                            ),
-                            label: const Text(
-                              "History",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const StaffHistory(),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
 
-              // Product List
+              // Product Table
               Container(
                 margin: const EdgeInsets.all(8),
                 padding: const EdgeInsets.all(8),
@@ -246,77 +311,139 @@ class _StaffState extends State<Staff> {
                         color: Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Row(
-                        children: const [
+                      child: const Row(
+                        children: [
                           Expanded(
                             flex: 1,
-                            child: Text(
-                              "ID",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            child: Text("ID", textAlign: TextAlign.center),
                           ),
                           Expanded(
                             flex: 2,
-                            child: Text(
-                              "Product",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            child: Text("Product", textAlign: TextAlign.center),
                           ),
                           Expanded(
                             flex: 2,
-                            child: Text(
-                              "Image",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            child: Text("Image", textAlign: TextAlign.center),
                           ),
                           Expanded(
                             flex: 2,
-                            child: Text(
-                              "Status",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            child: Text("Status", textAlign: TextAlign.center),
                           ),
                           Expanded(
                             flex: 3,
-                            child: Text(
-                              "Actions",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
+                            child: Text("Actions", textAlign: TextAlign.center),
                           ),
                         ],
                       ),
                     ),
                     const Divider(),
-                    ..._products.map((product) {
-                      return Column(
-                        children: [
-                          _ProductRow(
-                            id: product.id,
-                            name: product.name,
-                            imagePath: product.imagePath,
-                            status: product.status,
-                            statusColor: product.statusColor,
-                            isReturned: product.isReturned,
-                            onEdit: () {
-                              _showProductDialog(
+                    if (_products.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          "No data found...",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    else
+                      ..._products.map((product) {
+                        return Column(
+                          children: [
+                            _ProductRow(
+                              id: product.id,
+                              name: product.name,
+                              imagePath: product.imagePath,
+                              status: product.status,
+                              statusColor: product.statusColor,
+                              onEdit: () => _showProductDialog(
                                 title: "Edit Product",
                                 productName: product.name,
                                 id: product.id,
-                              );
-                            },
-                            onToggleReturn: _toggleReturnStatus,
-                            onToggleDisable: _toggleDisable,
-                          ),
-                          const Divider(),
-                        ],
-                      );
-                    }).toList(),
+                                isEdit: true, // ✅ Fix here
+                              ),
+                              onToggleDisable: _toggleDisable,
+                              onDelete: _deleteAsset, // ✅ Add Delete
+                              isReturned: product.isReturned,
+                            ),
+                            const Divider(),
+                          ],
+                        );
+                      }).toList(),
                   ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🔹 Bottom Nav Item
+  Widget _buildNavItem(
+    int index,
+    IconData icon,
+    String label, {
+    bool largeIcon = false,
+  }) {
+    final bool isSelected = _selectedIndex == index;
+    final bool isHovering = _hoverIndex == index;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoverIndex = index),
+      onExit: (_) => setState(() => _hoverIndex = -1),
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        transform: Matrix4.identity()..scale(isHovering ? 1.15 : 1.0),
+        child: GestureDetector(
+          onTap: () => _onItemTapped(index),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white
+                      : isHovering
+                      ? Colors.white.withOpacity(0.5)
+                      : Colors.transparent,
+                  shape: BoxShape.circle,
+                  boxShadow: isHovering
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Icon(
+                  icon,
+                  size: largeIcon ? 42 : 30,
+                  color: isSelected
+                      ? Colors.purple
+                      : isHovering
+                      ? Colors.deepPurple
+                      : Colors.black,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isSelected
+                      ? Colors.purple
+                      : isHovering
+                      ? Colors.deepPurple
+                      : Colors.black,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             ],
@@ -327,62 +454,7 @@ class _StaffState extends State<Staff> {
   }
 }
 
-// ------------------------- กล่อง Dashboard -------------------------
-class _StatBox extends StatelessWidget {
-  final Color color;
-  final String label;
-  final String value;
-
-  const _StatBox({
-    required this.color,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 80,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ------------------------- Product Row -------------------------
+// 🧩 Product Row
 class _ProductRow extends StatelessWidget {
   final String id;
   final String name;
@@ -390,9 +462,9 @@ class _ProductRow extends StatelessWidget {
   final String status;
   final Color statusColor;
   final VoidCallback onEdit;
-  final bool isReturned;
-  final Function(String id) onToggleReturn;
   final Function(String id) onToggleDisable;
+  final Function(String id) onDelete;
+  final bool isReturned;
 
   const _ProductRow({
     required this.id,
@@ -401,18 +473,13 @@ class _ProductRow extends StatelessWidget {
     required this.status,
     required this.statusColor,
     required this.onEdit,
-    required this.isReturned,
-    required this.onToggleReturn,
     required this.onToggleDisable,
+    required this.onDelete,
+    required this.isReturned,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Color returnButtonColor = isReturned
-        ? Colors.grey
-        : Colors.purple.shade300;
-    final String returnButtonLabel = isReturned ? "Returned" : "Return";
-
     final Color disableButtonColor = isReturned
         ? Colors.green
         : Colors.red.shade400;
@@ -424,35 +491,14 @@ class _ProductRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(
-            flex: 1,
-            child: Text(
-              id,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              name,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          Expanded(flex: 1, child: Text(id, textAlign: TextAlign.center)),
+          Expanded(flex: 2, child: Text(name, textAlign: TextAlign.center)),
           Expanded(
             flex: 2,
             child: Center(
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  image: DecorationImage(
-                    image: AssetImage(imagePath),
-                    fit: BoxFit.cover,
-                  ),
-                ),
+              child: CircleAvatar(
+                backgroundImage: NetworkImage(imagePath),
+                radius: 20,
               ),
             ),
           ),
@@ -465,9 +511,8 @@ class _ProductRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _MiniActionButton(
                   icon: Icons.edit,
@@ -484,10 +529,10 @@ class _ProductRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 _MiniActionButton(
-                  icon: Icons.undo,
-                  color: returnButtonColor,
-                  label: returnButtonLabel,
-                  onPressed: () => onToggleReturn(id),
+                  icon: Icons.delete,
+                  color: Colors.grey.shade700,
+                  label: "Delete",
+                  onPressed: () => onDelete(id),
                 ),
               ],
             ),
@@ -498,7 +543,7 @@ class _ProductRow extends StatelessWidget {
   }
 }
 
-// ------------------------- MiniActionButton -------------------------
+// 🧩 Mini Action Button
 class _MiniActionButton extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -521,9 +566,7 @@ class _MiniActionButton extends StatelessWidget {
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          minimumSize: const Size(60, 28),
         ),
         icon: Icon(icon, size: 14, color: Colors.white),
         label: Text(
@@ -535,23 +578,78 @@ class _MiniActionButton extends StatelessWidget {
   }
 }
 
-// ------------------------- Product Form Dialog -------------------------
-class _ProductFormDialog extends StatelessWidget {
+// 🧩 Product Form Dialog
+class _ProductFormDialog extends StatefulWidget {
   final String title;
   final String initialProductName;
   final String id;
+  final bool isEdit;
+  final Future<void> Function(String, String, File?) onAddAsset;
 
   const _ProductFormDialog({
     required this.title,
     required this.initialProductName,
     required this.id,
+    required this.onAddAsset,
+    this.isEdit = false,
   });
 
   @override
+  State<_ProductFormDialog> createState() => _ProductFormDialogState();
+}
+
+class _ProductFormDialogState extends State<_ProductFormDialog> {
+  final TextEditingController productNameController = TextEditingController();
+  File? _selectedImage;
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() {
+        _selectedImage = File(picked.path);
+      });
+    }
+  }
+
+  Future<void> _updateAsset(String name, File? imageFile) async {
+    try {
+      var uri = Uri.parse(
+        "http://192.168.234.1:3000/staff/editAsset/${widget.id}",
+      );
+      var request = http.MultipartRequest("PUT", uri);
+      request.fields["name"] = name;
+      request.fields["description"] = "Sport Equipment";
+
+      if (imageFile != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath("image", imageFile.path),
+        );
+      }
+
+      var response = await request.send();
+      var resBody = await response.stream.bytesToString();
+      var resJson = jsonDecode(resBody);
+
+      if (response.statusCode == 200 && resJson["success"] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Asset updated successfully")),
+        );
+        (context.findAncestorStateOfType<_StaffState>())
+            ?._fetchAssets(); // ✅ reload
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("❌ Failed: ${resJson["message"] ?? ''}")),
+        );
+      }
+    } catch (e) {
+      print("Error updating asset: $e");
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final TextEditingController productNameController = TextEditingController(
-      text: initialProductName,
-    );
+    productNameController.text = widget.initialProductName;
 
     return Container(
       width: 300,
@@ -563,16 +661,15 @@ class _ProductFormDialog extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            alignment: Alignment.centerLeft,
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Text(
-              "ID $id",
+              widget.isEdit ? "Edit Asset ID ${widget.id}" : "Add New Asset",
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
           Container(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             color: Colors.white,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -582,17 +679,11 @@ class _ProductFormDialog extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: TextField(
-                    controller: productNameController,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
+                TextField(
+                  controller: productNameController,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                 ),
@@ -602,62 +693,50 @@ class _ProductFormDialog extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      side: const BorderSide(color: Colors.grey),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: Text(
-                      "Load Image",
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
+                OutlinedButton(
+                  onPressed: _pickImage,
+                  child: const Text("📸 Choose Image"),
                 ),
+                if (_selectedImage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Image.file(_selectedImage!, height: 100),
+                  ),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(8.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    "Cancel",
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text("Cancel"),
                 ),
                 const SizedBox(width: 10),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () async {
+                    final name = productNameController.text.trim();
+                    if (name.isEmpty) return;
+
+                    if (widget.isEdit) {
+                      await _updateAsset(name, _selectedImage);
+                    } else {
+                      await widget.onAddAsset(
+                        name,
+                        "Sport Equipment",
+                        _selectedImage,
+                      );
+                    }
+
+                    if (mounted) Navigator.pop(context);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
                   ),
-                  child: const Text(
-                    "Apply",
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
+                  child: Text(widget.isEdit ? "Save Changes" : "Apply"),
                 ),
               ],
             ),

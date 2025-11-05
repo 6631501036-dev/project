@@ -175,7 +175,7 @@ class _Student_statusState extends State<Student_status> {
             ],
           ),
           Text(
-            item.status, 
+            item.status,
             style: TextStyle(
               color: item.status == 'Pending'
                   ? Colors.orange
