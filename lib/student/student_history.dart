@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:http/http.dart' as http; 
+import 'dart:convert'; 
 
 class Student_history extends StatefulWidget {
   const Student_history({super.key});
@@ -9,60 +11,55 @@ class Student_history extends StatefulWidget {
 }
 
 class _Student_historyState extends State<Student_history> {
-  bool _isLoading = true;
 
-  String _studentName = '';
-  String _avatarLetter = '';
-  StatusItem? _pendingItem;
+  final String baseUrl = "http://192.168.110.142:3000/api"; //ipconfig pc ของเรา
+  final String currentUserId = "1";
+ 
+
+  bool _isLoading = true;
   List<HistoryItem> _historyItems = [];
 
   @override
   void initState() {
     super.initState();
-
     _fetchData();
   }
 
+
   Future<void> _fetchData() async {
-    // API
+    setState(() {
+      _isLoading = true;
+      _historyItems = [];
+    });
 
-    // จำลองการหน่วงเวลาของ API
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/history/$currentUserId'))
+          .timeout(const Duration(seconds: 10));
 
-    final studentName = 'S  A  R  A';
-    final avatarLetter = 'S';
-    final pendingItem = StatusItem(
-      date: '10/18/2025',
-      itemName: 'Basketball',
-      status: 'Pending',
-    );
-    final historyItems = [
-      HistoryItem(
-        item: 'Football',
-        dateRange: '10/15/2025 - 10/17/2025',
-        lender: 'lender.Doe',
-        returnedBy: 'staff.Doe',
-      ),
-      HistoryItem(
-        item: 'Volleyball',
-        dateRange: '10/10/2025 - 10/10/2025',
-        lender: 'lender.Doe',
-        returnedBy: 'staff.Doe',
-      ),
-    ];
+      if (response.statusCode == 200 && mounted) {
+      
+        final List<dynamic> data = json.decode(response.body);
 
-    if (mounted) {
-      // (เช็คว่า widget ยังอยู่)
-      setState(() {
-        _studentName = studentName;
-        _avatarLetter = avatarLetter;
-        _pendingItem = pendingItem;
-        _historyItems = historyItems;
-        _isLoading = false;
-      });
+      
+        setState(() {
+          _historyItems = data
+              .map((jsonItem) => HistoryItem.fromJson(jsonItem))
+              .toList();
+        });
+      }
+    } catch (e) {
+      print("Error fetching history: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
-  //appbar ,background ,icon return ,icon logout
+ 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,162 +82,57 @@ class _Student_historyState extends State<Student_history> {
           ),
         ],
       ),
-      // ตรวจสอบสถานะ Loading ก่อนแสดงผล
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _buildBodyContent(),
     );
   }
-  //กรอบขาว
+
   Widget _buildBodyContent() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final appBarHeight = AppBar().preferredSize.height;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = 16.0;
+    final minCardHeight =
+        screenHeight - appBarHeight - topPadding - bottomPadding;
+
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(30.0),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 24.0),
-
-              _buildProfileSection(
-                name: _studentName,
-                avatarLetter: _avatarLetter,
-              ),
-              const SizedBox(height: 24.0),
-              _buildStatusSection(item: _pendingItem),
-              const SizedBox(height: 16.0),
-              //line
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20.0),
-                child: Divider(color: Color(0xFFEEEEEE)),
-              ),
-              const SizedBox(height: 16.0),
-              _buildHistorySection(items: _historyItems),
-              const SizedBox(height: 24.0),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  //  ปรับแก้รับพารามิเตอร์ name และ avatarLetter
-  Widget _buildProfileSection({
-    required String name,
-    required String avatarLetter,
-  }) {
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 50,
-          backgroundColor: Colors.grey[200],
-          child: Text(
-            avatarLetter,
-            style: const TextStyle(
-              fontSize: 48,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16.0),
-        Text(
-          name,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 6.0,
-          ),
-        ),
-      ],
-    );
-  }
-//status section
- Widget _buildStatusSection({StatusItem? item}) {
-    Widget cardContent;
-
-    if (item != null) {
-      cardContent = Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.date,
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                item.itemName,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          Text(
-            item.status,
-            style: const TextStyle(
-              color: Colors.orange,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      );
-    } else {
-      cardContent = const Center(
-        child: Text(
-          'no status today', 
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Status',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12.0),
-
-          Container(
-            width: double.infinity, 
-            padding: const EdgeInsets.all(16.0),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: minCardHeight),
+          child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16.0),
-              border: Border.all(color: const Color(0xFFEEEEEE)),
+              borderRadius: BorderRadius.circular(30.0),
             ),
-            child: cardContent, 
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 24.0),
+                _buildHistorySection(items: _historyItems),
+                const SizedBox(height: 24.0),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
-  
-  //history
+
   Widget _buildHistorySection({required List<HistoryItem> items}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'History',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          const Center(
+            child: Text(
+              'History',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
           ),
           const SizedBox(height: 12.0),
-
           if (items.isEmpty)
             const Center(
               child: Text(
@@ -264,8 +156,18 @@ class _Student_historyState extends State<Student_history> {
       ),
     );
   }
-  //ข้อมูนใน history card
+
   Widget _buildHistoryCard({required HistoryItem item}) {
+    // ฟังก์ชันช่วยเลือกสีให้ตรงกับ DB
+    Color getStatusColor(String status) {
+      if (status == 'Approved') {
+        return Colors.green;
+      } else if (status == 'Rejected' || status == 'Cancelled') {
+        return Colors.red;
+      }
+      return Colors.grey;
+    }
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -289,7 +191,7 @@ class _Student_historyState extends State<Student_history> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                item.item,
+                item.item, 
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -300,6 +202,15 @@ class _Student_historyState extends State<Student_history> {
                 item.dateRange,
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
+              const SizedBox(height: 4),
+              Text(
+                item.status, 
+                style: TextStyle(
+                  color: getStatusColor(item.status), 
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
             ],
           ),
           _buildHistoryDetails(item: item),
@@ -307,14 +218,14 @@ class _Student_historyState extends State<Student_history> {
       ),
     );
   }
-  //detailในcard history lender,returned
+
   Widget _buildHistoryDetails({required HistoryItem item}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Lender', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
         Text(
-          item.lender,
+          item.lender, 
           style: const TextStyle(color: Colors.black, fontSize: 14),
         ),
         const SizedBox(height: 4),
@@ -323,7 +234,7 @@ class _Student_historyState extends State<Student_history> {
           style: TextStyle(color: Colors.grey[600], fontSize: 12),
         ),
         Text(
-          item.returnedBy,
+          item.returnedBy, 
           style: const TextStyle(color: Colors.black, fontSize: 14),
         ),
       ],
@@ -331,28 +242,47 @@ class _Student_historyState extends State<Student_history> {
   }
 }
 
-class StatusItem {
-  final String date;
-  final String itemName;
-  final String status;
-
-  StatusItem({
-    required this.date,
-    required this.itemName,
-    required this.status,
-  });
-}
 
 class HistoryItem {
   final String item;
   final String dateRange;
   final String lender;
   final String returnedBy;
+  final String status;
 
   HistoryItem({
     required this.item,
     required this.dateRange,
     required this.lender,
     required this.returnedBy,
+    required this.status,
   });
+
+
+  factory HistoryItem.fromJson(Map<String, dynamic> json) {
+    // ฟังก์ชันช่วย Format วันที่
+    String formatDate(String? dateStr) {
+      if (dateStr == null) return 'N/A';
+      try {
+        final utc = DateTime.parse(dateStr).toUtc();
+        final local = utc.toLocal();
+        return local.toString().split(' ')[0]; 
+      } catch (e) {
+        return 'N/A';
+      }
+    }
+
+   
+   
+    final String dateRange =
+        "${formatDate(json['borrow_date'])} - ${formatDate(json['return_date'])}";
+
+    return HistoryItem(
+      item: json['asset_name'] ?? 'Unknown Item',
+      dateRange: dateRange,
+      lender: json['lender_name'] ?? 'N/A', 
+      returnedBy: json['staff_name'] ?? 'N/A', 
+      status: json['request_status'] ?? 'Unknown', 
+    );
+  }
 }
