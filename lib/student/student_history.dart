@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 class Student_history extends StatefulWidget {
   const Student_history({super.key});
@@ -11,9 +9,6 @@ class Student_history extends StatefulWidget {
 }
 
 class _Student_historyState extends State<Student_history> {
-  final String baseUrl = "http://192.168.234.1:3000/api"; //ipconfig pc ของเรา
-  final String currentUserId = "1";
-
   bool _isLoading = true;
   List<HistoryItem> _historyItems = [];
 
@@ -24,36 +19,46 @@ class _Student_historyState extends State<Student_history> {
   }
 
   Future<void> _fetchData() async {
-    setState(() {
-      _isLoading = true;
-      _historyItems = [];
-    });
+    // API
 
-    try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/history/$currentUserId'))
-          .timeout(const Duration(seconds: 10));
+    // จำลองการหน่วงเวลาของ API
+    await Future.delayed(const Duration(seconds: 1));
 
-      if (response.statusCode == 200 && mounted) {
-        final List<dynamic> data = json.decode(response.body);
+    final studentName = 'S  A  R  A';
+    final avatarLetter = 'S';
+    final pendingItem = StatusItem(
+      date: '10/18/2025',
+      itemName: 'Basketball',
+      status: 'Pending',
+    );
+    final historyItems = [
+      HistoryItem(
+        item: 'Football',
+        dateRange: '10/15/2025 - 10/17/2025',
+        lender: 'lender.Doe',
+        returnedBy: 'staff.Doe',
+      ),
+      HistoryItem(
+        item: 'Volleyball',
+        dateRange: '10/10/2025 - 10/10/2025',
+        lender: 'lender.Doe',
+        returnedBy: 'staff.Doe',
+      ),
+    ];
 
-        setState(() {
-          _historyItems = data
-              .map((jsonItem) => HistoryItem.fromJson(jsonItem))
-              .toList();
-        });
-      }
-    } catch (e) {
-      print("Error fetching history: $e");
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    if (mounted) {
+      // (เช็คว่า widget ยังอยู่)
+      setState(() {
+        _studentName = studentName;
+        _avatarLetter = avatarLetter;
+        _pendingItem = pendingItem;
+        _historyItems = historyItems;
+        _isLoading = false;
+      });
     }
   }
 
+  //appbar ,background ,icon return ,icon logout
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -196,15 +201,6 @@ class _Student_historyState extends State<Student_history> {
                 item.dateRange,
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
-              const SizedBox(height: 4),
-              Text(
-                item.status,
-                style: TextStyle(
-                  color: getStatusColor(item.status),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
             ],
           ),
           _buildHistoryDetails(item: item),
@@ -236,6 +232,18 @@ class _Student_historyState extends State<Student_history> {
   }
 }
 
+class StatusItem {
+  final String date;
+  final String itemName;
+  final String status;
+
+  StatusItem({
+    required this.date,
+    required this.itemName,
+    required this.status,
+  });
+}
+
 class HistoryItem {
   final String item;
   final String dateRange;
@@ -250,29 +258,4 @@ class HistoryItem {
     required this.returnedBy,
     required this.status,
   });
-
-  factory HistoryItem.fromJson(Map<String, dynamic> json) {
-    // ฟังก์ชันช่วย Format วันที่
-    String formatDate(String? dateStr) {
-      if (dateStr == null) return 'N/A';
-      try {
-        final utc = DateTime.parse(dateStr).toUtc();
-        final local = utc.toLocal();
-        return local.toString().split(' ')[0];
-      } catch (e) {
-        return 'N/A';
-      }
-    }
-
-    final String dateRange =
-        "${formatDate(json['borrow_date'])} - ${formatDate(json['return_date'])}";
-
-    return HistoryItem(
-      item: json['asset_name'] ?? 'Unknown Item',
-      dateRange: dateRange,
-      lender: json['lender_name'] ?? 'N/A',
-      returnedBy: json['staff_name'] ?? 'N/A',
-      status: json['request_status'] ?? 'Unknown',
-    );
-  }
 }

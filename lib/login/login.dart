@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/staff/staff.dart';
 import 'package:flutter_application_1/student/student.dart';
 import 'package:http/http.dart' as http;
-
 import 'package:flutter_application_1/lender/lender.dart';
 import 'package:flutter_application_1/register/register.dart';
 
@@ -17,77 +16,80 @@ class Login extends StatefulWidget {
 class _LoginState extends State<Login> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _isLoading = false;
+  // URL ของเซิร์ฟเวอร์ สามาเปลี่ยนได้***********************************************************อย่าลืมเปลี่ยนนะ************************************
+  final url = '192.168.1.105:3000';
+  bool _isLoading = false; // เผื่อไว้แสดงสถานะโหลดตอนกด Log in
 
   Future<void> _login() async {
-    final username = _usernameController.text.trim();
-    final password = _passwordController.text.trim();
-
-    if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in both fields")),
-      );
-      return;
-    }
-
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // ⚠️ Change this to your actual local IP or server address
-      final url = Uri.parse("http://192.168.234.1:3000/login");
-
+      Uri uri = Uri.http(url, '/login');
       final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"username": username, "password": password}),
-      );
-
-      setState(() {
-        _isLoading = false;
-      });
-
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'username': _usernameController.text.trim(),
+          'password': _passwordController.text.trim(),
+        }),
+      ).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        // เอา token สำหรับเก็บ response body ที่ส่งกลับมา
+        String token = response.body;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data["message"] ?? "Login successful")),
-        );
+        final data = json.decode(token);
+        // บันทึก token ลง SharedPreferences
+        final storage = await SharedPreferences.getInstance();
+        await storage.setString('token', token);
+        // safety check ใน Flutter เพื่อป้องกันการเรียกใช้ setState หรือ widget methods หลังจากที่ widget ถูกทำลายไปแล้ว
+        if (!mounted) return;
+        // แสดง Success message
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(data['message'])));
 
-        final role = data["role"];
-        if (role == "borrower") {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const Student()),
-          );
-        } else if (role == "staff") {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const Staff()),
-          );
-        } else if (role == "lender") {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const Lender()),
-          );
-        } else {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text("Unknown user role")));
+        // นำทางไปยังหน้าต่างๆ ตาม role
+        switch (data['role']) {
+          case 'student':
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const Student()),
+            );
+            break;
+          case 'staff':
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const Staff()),
+            );
+            break;
+          case 'lender':
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const Lender()),
+            );
+            break;
         }
       } else {
+        // แสดง error message
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Login failed: ${response.body}")),
+          SnackBar(content: Text(response.body), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
+      print('Error details: $e'); // เพิ่มการ print error เพื่อดูรายละเอียด
+      // แสดง error message กรณีมีปัญหาการเชื่อมต่อ
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Connection error. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
