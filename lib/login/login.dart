@@ -5,6 +5,7 @@ import 'package:flutter_application_1/student/student.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_application_1/lender/lender.dart';
 import 'package:flutter_application_1/register/register.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -27,14 +28,16 @@ class _LoginState extends State<Login> {
 
     try {
       Uri uri = Uri.http(url, '/login');
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'username': _usernameController.text.trim(),
-          'password': _passwordController.text.trim(),
-        }),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'username': _usernameController.text.trim(),
+              'password': _passwordController.text.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         // เอา token สำหรับเก็บ response body ที่ส่งกลับมา
         String token = response.body;
