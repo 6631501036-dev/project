@@ -40,7 +40,10 @@ class _StudentState extends State<Student> with RouteAware {
 
   Future<void> fetchAssets() async {
     try {
-      final res = await http.get(Uri.parse("http://192.168.110.142:3000/asset"));
+      final res = await http.get(
+        Uri.parse("http://172.28.147.41:3000/api/student/asset"),
+      );
+
       if (res.statusCode == 200) {
         setState(() {
           equipmentList = List<Map<String, dynamic>>.from(
@@ -90,7 +93,7 @@ class _StudentState extends State<Student> with RouteAware {
 
     try {
       final res = await http.post(
-        Uri.parse("http://192.168.110.142:3000/borrower/borrow"),
+        Uri.parse("http://172.28.147.41:3000/api/student/borrow"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode(body),
       );
@@ -112,9 +115,35 @@ class _StudentState extends State<Student> with RouteAware {
   }
 
   Future<void> requestReturn(int requestId, String assetName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Confirm Return"),
+        content: Text("Return $assetName?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      submitReturnRequest(requestId, assetName);
+    }
+  }
+
+  Future<void> submitReturnRequest(int requestId, String assetName) async {
     try {
       final res = await http.put(
-        Uri.parse("http://192.168.110.142:3000/student/returnAsset/$requestId"),
+        Uri.parse(
+          "http://172.28.147.41:3000/api/student/returnAsset/$requestId",
+        ),
       );
 
       if (!mounted) return;
@@ -122,15 +151,14 @@ class _StudentState extends State<Student> with RouteAware {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            res.statusCode == 200
-                ? "Return request sent ✅"
-                : "Request return failed ❌",
+            res.statusCode == 200 ? "Return request sent ✅" : "Return failed ❌",
           ),
         ),
       );
+
       if (res.statusCode == 200) fetchAssets();
     } catch (e) {
-      print("Return request error: $e");
+      print("Return error: $e");
     }
   }
 
@@ -182,10 +210,7 @@ class _StudentState extends State<Student> with RouteAware {
                           ),
                         );
                       },
-                      icon: const Icon(
-                        Icons.manage_search_rounded,
-                        color: Colors.black,
-                      ),
+                      icon: const Icon(Icons.manage_search_rounded),
                       label: const Text('Status'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green.shade200,
@@ -201,10 +226,7 @@ class _StudentState extends State<Student> with RouteAware {
                           ),
                         );
                       },
-                      icon: const Icon(
-                        Icons.history_rounded,
-                        color: Colors.black,
-                      ),
+                      icon: const Icon(Icons.history_rounded),
                       label: const Text('History'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue.shade200,
@@ -230,6 +252,8 @@ class _StudentState extends State<Student> with RouteAware {
                         returnStatus == 'Not Returned';
                     final isReturnRequested =
                         returnStatus == 'Requested Return';
+
+                    final imageFile = item['image'] ?? "";
 
                     return Column(
                       children: [
@@ -298,18 +322,18 @@ class _StudentState extends State<Student> with RouteAware {
                             const SizedBox(width: 12),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
-                              child: Image.asset(
-                                "assets/images/${item['image']}",
+                              child: Image.network(
+                                "http://172.28.147.41:3000$imageFile"
+                                    .replaceAll(' ', '%20'),
                                 width: 80,
                                 height: 80,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.broken_image, size: 60),
+                                    const Icon(Icons.broken_image),
                               ),
                             ),
                           ],
                         ),
-
                         const Divider(),
                       ],
                     );
