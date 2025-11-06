@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:http/http.dart' as http; 
-import 'dart:convert'; 
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_1/login/login.dart';
 
 class Student_history extends StatefulWidget {
   const Student_history({super.key});
@@ -11,10 +13,8 @@ class Student_history extends StatefulWidget {
 }
 
 class _Student_historyState extends State<Student_history> {
-
-  final String baseUrl = "http://192.168.110.142:3000/api"; //ipconfig pc ของเรา
-  final String currentUserId = "1";
- 
+  final String baseUrl = "http://172.27.7.65:3000/api";
+  int? userId;
 
   bool _isLoading = true;
   List<HistoryItem> _historyItems = [];
@@ -22,11 +22,25 @@ class _Student_historyState extends State<Student_history> {
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    _loadUserAndFetch();
   }
 
+  Future<void> _loadUserAndFetch() async {
+    final prefs = await SharedPreferences.getInstance();
+    userId = prefs.getInt('user_id');
+    if (userId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please login again.")));
+      setState(() => _isLoading = false);
+      return;
+    }
+    await _fetchData();
+  }
 
   Future<void> _fetchData() async {
+    if (userId == null) return;
     setState(() {
       _isLoading = true;
       _historyItems = [];
@@ -34,34 +48,76 @@ class _Student_historyState extends State<Student_history> {
 
     try {
       final response = await http
-          .get(Uri.parse('$baseUrl/history/$currentUserId'))
+          .get(Uri.parse('$baseUrl/student/history/$userId'))
           .timeout(const Duration(seconds: 10));
-
       if (response.statusCode == 200 && mounted) {
-      
         final List<dynamic> data = json.decode(response.body);
-
-      
         setState(() {
           _historyItems = data
               .map((jsonItem) => HistoryItem.fromJson(jsonItem))
               .toList();
         });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to load history: ${response.statusCode}'),
+            ),
+          );
+        }
       }
     } catch (e) {
       print("Error fetching history: $e");
-    } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Network error while loading history")),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
- 
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Confirm Logout"),
+        content: const Text("Are you sure you want to log out?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final appBarHeight = AppBar().preferredSize.height;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = 16.0;
+    final minCardHeight =
+        screenHeight - appBarHeight - topPadding - bottomPadding;
+
     return Scaffold(
       backgroundColor: Colors.blue.shade100,
       appBar: AppBar(
@@ -70,53 +126,44 @@ class _Student_historyState extends State<Student_history> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
           onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            }
+            if (Navigator.canPop(context)) Navigator.pop(context);
           },
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.black),
-            onPressed: () {},
+            onPressed: _logout,
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _buildBodyContent(),
-    );
-  }
-
-  Widget _buildBodyContent() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final appBarHeight = AppBar().preferredSize.height;
-    final topPadding = MediaQuery.of(context).padding.top;
-    final bottomPadding = 16.0;
-    final minCardHeight =
-        screenHeight - appBarHeight - topPadding - bottomPadding;
-
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: minCardHeight),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(30.0),
+          : RefreshIndicator(
+              onRefresh: _fetchData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: minCardHeight),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30.0),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 24.0),
+                          _buildHistorySection(items: _historyItems),
+                          const SizedBox(height: 24.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 24.0),
-                _buildHistorySection(items: _historyItems),
-                const SizedBox(height: 24.0),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -148,9 +195,8 @@ class _Student_historyState extends State<Student_history> {
               itemBuilder: (context, index) {
                 return _buildHistoryCard(item: items[index]);
               },
-              separatorBuilder: (context, index) {
-                return const SizedBox(height: 12.0);
-              },
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: 12.0),
             ),
         ],
       ),
@@ -158,13 +204,9 @@ class _Student_historyState extends State<Student_history> {
   }
 
   Widget _buildHistoryCard({required HistoryItem item}) {
-    // ฟังก์ชันช่วยเลือกสีให้ตรงกับ DB
     Color getStatusColor(String status) {
-      if (status == 'Approved') {
-        return Colors.green;
-      } else if (status == 'Rejected' || status == 'Cancelled') {
-        return Colors.red;
-      }
+      if (status == 'Returned') return Colors.green;
+      if (status == 'Rejected') return Colors.red;
       return Colors.grey;
     }
 
@@ -191,7 +233,7 @@ class _Student_historyState extends State<Student_history> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                item.item, 
+                item.item,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -204,44 +246,42 @@ class _Student_historyState extends State<Student_history> {
               ),
               const SizedBox(height: 4),
               Text(
-                item.status, 
+                item.status,
                 style: TextStyle(
-                  color: getStatusColor(item.status), 
+                  color: getStatusColor(item.status),
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                 ),
               ),
             ],
           ),
-          _buildHistoryDetails(item: item),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Lender',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              Text(
+                item.lender,
+                style: const TextStyle(color: Colors.black, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Returned',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              Text(
+                item.returnedBy,
+                style: const TextStyle(color: Colors.black, fontSize: 14),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
-
-  Widget _buildHistoryDetails({required HistoryItem item}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Lender', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-        Text(
-          item.lender, 
-          style: const TextStyle(color: Colors.black, fontSize: 14),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'returned',
-          style: TextStyle(color: Colors.grey[600], fontSize: 12),
-        ),
-        Text(
-          item.returnedBy, 
-          style: const TextStyle(color: Colors.black, fontSize: 14),
-        ),
-      ],
-    );
-  }
 }
-
 
 class HistoryItem {
   final String item;
@@ -258,31 +298,42 @@ class HistoryItem {
     required this.status,
   });
 
-
   factory HistoryItem.fromJson(Map<String, dynamic> json) {
-    // ฟังก์ชันช่วย Format วันที่
     String formatDate(String? dateStr) {
       if (dateStr == null) return 'N/A';
       try {
-        final utc = DateTime.parse(dateStr).toUtc();
-        final local = utc.toLocal();
-        return local.toString().split(' ')[0]; 
+        final DateTime utcDateTime = DateTime.parse(dateStr);
+        //แปลงจากเวลา UTC ให้เป็น "เวลาของเครื่อง" (Local Time)
+        final DateTime localDateTime = utcDateTime.toLocal();
+        return localDateTime.toString().split(' ')[0];
       } catch (e) {
-        return 'N/A';
+        return dateStr.split('T')[0];
       }
     }
 
-   
-   
     final String dateRange =
         "${formatDate(json['borrow_date'])} - ${formatDate(json['return_date'])}";
 
+    final String requestStatus = json['request_status'] ?? 'Unknown';
+    final String returnStatus = json['return_status'];
+
+    String finalStatus;
+    String finalReturnedBy = '-';
+
+    if (returnStatus == 'Returned') {
+      // กรณี "คืนแล้ว": คือสถานะสุดท้าย
+      finalStatus = 'Returned';
+      finalReturnedBy = json['staff_name'] ?? 'Returned'; // แสดงชื่อ Staff
+    } else {
+      // กรณี "ยังไม่คืน": ให้ใช้สถานะการอนุมัติ
+      finalStatus = requestStatus;
+    }
     return HistoryItem(
       item: json['asset_name'] ?? 'Unknown Item',
       dateRange: dateRange,
-      lender: json['lender_name'] ?? 'N/A', 
-      returnedBy: json['staff_name'] ?? 'N/A', 
-      status: json['request_status'] ?? 'Unknown', 
+      lender: json['lender_name'] ?? '-',
+      returnedBy: finalReturnedBy,
+      status: finalStatus,
     );
   }
 }
