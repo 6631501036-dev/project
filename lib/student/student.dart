@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'student_history.dart';
 import 'student_status.dart';
+import 'package:intl/intl.dart';
 
 class Student extends StatefulWidget {
   const Student({super.key});
@@ -11,56 +13,100 @@ class Student extends StatefulWidget {
   State<Student> createState() => _StudentState();
 }
 
-class _StudentState extends State<Student> with RouteAware {
-  final int borrowerId = 1;
+class _StudentState extends State<Student> {
+  int? borrowerId;
+  String? username;
+  String? profileImageUrl;
+  int borrowedToday = 0; // จำนวนที่ยืมแล้ววันนี้
   List<Map<String, dynamic>> equipmentList = [];
+  final String baseUrl = "http://192.168.234.1:3000";
 
   @override
   void initState() {
     super.initState();
-    fetchAssets();
+    _loadUserData();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  Future<void> _loadUserData() async {
+    final storage = await SharedPreferences.getInstance();
+    final token = storage.getString('token');
+    final savedName = storage.getString('username');
+
+    if (token != null) {
+      final data = json.decode(token);
+      setState(() {
+        borrowerId = data['user_id'];
+        username = savedName ?? data['username'] ?? "Student";
+        profileImageUrl = "$baseUrl/profile/${data['user_id']}.jpg";
+      });
+      await fetchAssets();
+      await fetchBorrowedCount();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("User not found, please login again")),
+      );
+    }
   }
 
-  @override
-  void didPopNext() {
-    fetchAssets();
-  }
-
-  @override
-  void dispose() {
-    routeObserver.unsubscribe(this);
-    super.dispose();
+  // ดึงจำนวนที่ยืมแล้ววันนี้
+  Future<void> fetchBorrowedCount() async {
+    if (borrowerId == null) return;
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/borrower/borrow_count?borrower_id=$borrowerId"),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['success'] == true) {
+          setState(() {
+            borrowedToday = data['count'] ?? 0;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error fetching borrow count: $e");
+    }
   }
 
   Future<void> fetchAssets() async {
+    if (borrowerId == null) return;
     try {
       final res = await http.get(
-        Uri.parse("http://192.168.110.142:3000/asset"),
+        Uri.parse("$baseUrl/asset?borrower_id=$borrowerId"),
       );
       if (res.statusCode == 200) {
-        setState(() {
-          equipmentList = List<Map<String, dynamic>>.from(
-            jsonDecode(res.body)['assets'],
-          );
-        });
+        final data = jsonDecode(res.body);
+        if (data['success'] == true) {
+          setState(() {
+            equipmentList = List<Map<String, dynamic>>.from(data['assets']);
+          });
+        }
       }
     } catch (e) {
       print("Fetch error: $e");
     }
   }
 
+  // ✅ Popup เมื่อกดยืม
   Future<void> confirmBorrow(int assetId, String assetName) async {
+    final now = DateTime.now();
+    final tomorrow = now.add(const Duration(days: 1));
+    final borrowDate = DateFormat('yyyy-MM-dd').format(now);
+    final returnDate = DateFormat('yyyy-MM-dd').format(tomorrow);
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Confirm Borrow"),
-        content: Text("Borrow $assetName?"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("Do you want to borrow $assetName?"),
+            const SizedBox(height: 10),
+            Text("Borrow date: $borrowDate"),
+            Text("Return date: $returnDate"),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -74,65 +120,63 @@ class _StudentState extends State<Student> with RouteAware {
       ),
     );
 
-    if (confirm == true) {
-      borrowEquipment(assetId, assetName);
-    }
+    if (confirm == true) borrowEquipment(assetId, assetName, returnDate);
   }
 
-  Future<void> borrowEquipment(int assetId, String assetName) async {
+  // ✅ ฟังก์ชันยืมของ
+  Future<void> borrowEquipment(
+    int assetId,
+    String assetName,
+    String returnDate,
+  ) async {
+    if (borrowerId == null) return;
+
+    // ถ้ายืมครบ 1 ชิ้นแล้ว ห้ามยืมเพิ่ม
+    if (borrowedToday >= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("You can borrow only 1 item per day ❌"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final body = {
-      "borrower_id": borrowerId.toString(),
-      "asset_id": assetId.toString(),
-      "borrow_date": DateTime.now().toString().substring(0, 10),
-      "return_date": DateTime.now()
-          .add(const Duration(days: 7))
-          .toString()
-          .substring(0, 10),
+      "borrower_id": borrowerId,
+      "asset_id": assetId,
+      "return_date": returnDate,
     };
 
     try {
       final res = await http.post(
-        Uri.parse("http://192.168.110.142:3000/borrower/borrow"),
+        Uri.parse("$baseUrl/borrower/borrow"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode(body),
       );
 
       if (!mounted) return;
+      final response = jsonDecode(res.body);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            res.statusCode == 200 ? "Borrow request sent ✅" : "Borrow failed ❌",
+      if (res.statusCode == 200 && response['success'] == true) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Borrow request sent ✅")));
+        await fetchAssets();
+        await fetchBorrowedCount();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Borrow failed ❌ ${response['message'] ?? ''}"),
+            backgroundColor: Colors.red,
           ),
-        ),
-      );
-
-      if (res.statusCode == 200) fetchAssets();
+        );
+      }
     } catch (e) {
       print("Borrow error: $e");
-    }
-  }
-
-  Future<void> requestReturn(int requestId, String assetName) async {
-    try {
-      final res = await http.put(
-        Uri.parse("http://192.168.110.142:3000/student/returnAsset/$requestId"),
-      );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            res.statusCode == 200
-                ? "Return request sent ✅"
-                : "Request return failed ❌",
-          ),
-        ),
-      );
-      if (res.statusCode == 200) fetchAssets();
-    } catch (e) {
-      print("Return request error: $e");
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Network error ❌")));
     }
   }
 
@@ -154,177 +198,181 @@ class _StudentState extends State<Student> with RouteAware {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFE8F3FF),
       appBar: AppBar(
-        title: const Text(
-          'Sport Equipment',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.blue.shade100,
+        title: const Text("Sport Equipment"),
+        backgroundColor: Colors.blue.shade200,
         actions: [
-          IconButton(icon: const Icon(Icons.logout_rounded), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () async {
+              final storage = await SharedPreferences.getInstance();
+              await storage.remove('token');
+              if (!mounted) return;
+              Navigator.pushReplacementNamed(context, '/login');
+            },
+          ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: fetchAssets,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const Student_status(),
+      body: borrowerId == null
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: () async {
+                await fetchAssets();
+                await fetchBorrowedCount();
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      // 🔹 โปรไฟล์ผู้ใช้ + จำนวนที่ยืมได้
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 35,
+                            backgroundImage: NetworkImage(profileImageUrl!),
+                            onBackgroundImageError: (_, __) =>
+                                const Icon(Icons.person, size: 40),
                           ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.manage_search_rounded,
-                        color: Colors.black,
-                      ),
-                      label: const Text('Status'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade200,
-                        foregroundColor: Colors.black,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const Student_history(),
+                          const SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                username ?? "Student",
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                "Available to borrow: ${borrowedToday < 1 ? 1 - borrowedToday : 0}",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: borrowedToday < 1
+                                      ? Colors.green
+                                      : Colors.red,
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.history_rounded,
-                        color: Colors.black,
+                        ],
                       ),
-                      label: const Text('History'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade200,
-                        foregroundColor: Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
 
-                Column(
-                  children: equipmentList.map((item) {
-                    final status = item['asset_status'] ?? 'Available';
-                    final requestId = item['request_id'] ?? 0;
-                    final itemBorrowerId = item['borrower_id'] ?? 0;
-                    final returnStatus =
-                        item['return_status'] ?? 'Not Returned';
+                      const SizedBox(height: 25),
 
-                    final enableBorrow = status == 'Available';
-                    final enableReturn =
-                        status == 'Borrowed' &&
-                        itemBorrowerId == borrowerId &&
-                        returnStatus == 'Not Returned';
-                    final isReturnRequested =
-                        returnStatus == 'Requested Return';
-
-                    return Column(
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item['asset_name'] ?? '',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    status,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: getStatusColor(status),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ElevatedButton(
-                                    onPressed:
-                                        (enableBorrow || enableReturn) &&
-                                            !isReturnRequested
-                                        ? () {
-                                            if (enableBorrow) {
-                                              confirmBorrow(
-                                                item['asset_id'],
-                                                item['asset_name'],
-                                              );
-                                            } else if (enableReturn &&
-                                                requestId != 0) {
-                                              requestReturn(
-                                                requestId,
-                                                item['asset_name'],
-                                              );
-                                            }
-                                          }
-                                        : null,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: enableReturn
-                                          ? (isReturnRequested
-                                                ? Colors.grey
-                                                : Colors.purple)
-                                          : enableBorrow
-                                          ? Colors.blue
-                                          : Colors.grey,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      enableReturn ? "Return" : "Borrow",
-                                    ),
-                                  ),
-                                ],
+                      // 🔹 ปุ่ม Status & History
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const Student_status(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.manage_search_rounded),
+                            label: const Text('Status'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green.shade200,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 30,
+                                vertical: 12,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.asset(
-                                "assets/images/${item['image']}",
-                                width: 80,
-                                height: 80,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.broken_image, size: 60),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const StudentHistory(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.history_rounded),
+                            label: const Text('History'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade200,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 30,
+                                vertical: 12,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
 
-                        const Divider(),
-                      ],
-                    );
-                  }).toList(),
+                      const SizedBox(height: 20),
+
+                      // 🔹 รายการอุปกรณ์
+                      Column(
+                        children: equipmentList.map((item) {
+                          final status = item['asset_status'] ?? 'Available';
+                          final enableBorrow =
+                              status == 'Available' && borrowedToday < 1;
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 3,
+                            child: ListTile(
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  "$baseUrl${item['image']}",
+                                  width: 60,
+                                  height: 60,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.broken_image, size: 40),
+                                ),
+                              ),
+                              title: Text(item['asset_name'] ?? ''),
+                              subtitle: Text(
+                                status,
+                                style: TextStyle(
+                                  color: getStatusColor(status),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              trailing: ElevatedButton(
+                                onPressed: enableBorrow
+                                    ? () => confirmBorrow(
+                                        item['asset_id'],
+                                        item['asset_name'],
+                                      )
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: enableBorrow
+                                      ? Colors.blue
+                                      : Colors.grey.shade400,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                ),
+                                child: const Text("Borrow"),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
-
-final RouteObserver<ModalRoute<void>> routeObserver =
-    RouteObserver<ModalRoute<void>>();

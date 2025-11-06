@@ -19,7 +19,7 @@ class _LoginState extends State<Login> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   // URL ของเซิร์ฟเวอร์ สามาเปลี่ยนได้***********************************************************อย่าลืมเปลี่ยนนะ************************************
-  final url = '192.168.1.105:3000';
+  final url = '192.168.234.1:3000';
   bool _isLoading = false; // เผื่อไว้แสดงสถานะโหลดตอนกด Log in
 
   Future<void> _login() async {
@@ -29,14 +29,16 @@ class _LoginState extends State<Login> {
 
     try {
       Uri uri = Uri.http(url, '/login');
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'username': _usernameController.text.trim(),
-          'password': _passwordController.text.trim(),
-        }),
-      ).timeout(const Duration(seconds: 5));
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'username': _usernameController.text.trim(),
+              'password': _passwordController.text.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         // เอา token สำหรับเก็บ response body ที่ส่งกลับมา
         String token = response.body;
