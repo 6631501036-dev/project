@@ -5,7 +5,8 @@ import 'package:flutter_application_1/register/register.dart';
 import 'package:flutter_application_1/staff/staff.dart';
 import 'package:flutter_application_1/student/student.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -43,19 +44,22 @@ class _LoginState extends State<Login> {
         // เอา token สำหรับเก็บ response body ที่ส่งกลับมา
         String token = response.body;
 
-        final data = json.decode(token);
-        // บันทึก token ลง SharedPreferences
-        final storage = await SharedPreferences.getInstance();
-        await storage.setString('token', token);
+        // เก็บ token ใน FlutterSecureStorage
+        final storage = FlutterSecureStorage();
+        await storage.write(key: 'token', value: token);
+
+        // Decode JWT token
+        final jwt = JWT.decode(token);
+        Map payload = jwt.payload;
         // safety check ใน Flutter เพื่อป้องกันการเรียกใช้ setState หรือ widget methods หลังจากที่ widget ถูกทำลายไปแล้ว
         if (!mounted) return;
         // แสดง Success message
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(data['message'])));
+        ).showSnackBar(SnackBar(content: Text(payload['message'])));
 
         // นำทางไปยังหน้าต่างๆ ตาม role
-        switch (data['role']) {
+        switch (payload['role']) {
           case 'student':
             Navigator.pushReplacement(
               context,
