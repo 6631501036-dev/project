@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/staff/request.dart';
 import 'package:flutter_application_1/staff/staff_history.dart';
 import 'package:flutter_application_1/staff/menu_staff.dart';
 import 'package:flutter_application_1/login/login.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+// ✅ Class สำหรับข้อมูลสินทรัพย์
 class Product {
   final String id;
   final String name;
@@ -27,16 +29,18 @@ class Product {
 }
 
 class Staff extends StatefulWidget {
-  const Staff({super.key});
+  final int staffId;
+  final String username;
+
+  const Staff({super.key, required this.staffId, required this.username});
 
   @override
   State<Staff> createState() => _StaffState();
 }
 
 class _StaffState extends State<Staff> {
-  int _selectedIndex = 0;
+  int _selectedIndex = 2;
   int _hoverIndex = -1;
-
   List<Product> _products = [];
 
   @override
@@ -45,40 +49,47 @@ class _StaffState extends State<Staff> {
     _fetchAssets();
   }
 
-  // ✅ ดึงข้อมูลจาก Database ผ่าน API
+  // ✅ โหลดข้อมูลสินทรัพย์จากฐานข้อมูล
   Future<void> _fetchAssets() async {
     try {
-      final url = Uri.parse("http://192.168.234.1:3000/staff/assets");
-      final response = await http.get(url);
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
+      // ❌ แก้ไข IP Address ให้ถูกต้อง หากมีการเปลี่ยนแปลง
+      final url = Uri.parse("http://192.168.234.1:3000/assets");
+      final response = await http.get(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data["success"] == true) {
-          List<Product> loaded = [];
-          for (var a in data["assets"]) {
-            loaded.add(
-              Product(
-                id: a["asset_id"].toString(),
-                name: a["asset_name"],
-                imagePath:
-                    "http://192.168.234.1:3000${a["image"]}", // ✅ โหลดรูปจาก backend
-                status: a["asset_status"],
-                statusColor: _getStatusColor(a["asset_status"]),
-              ),
-            );
-          }
-          setState(() {
-            _products = loaded;
-          });
-        }
+        final assets = data['assets'] as List;
+        setState(() {
+          _products = assets
+              .map(
+                (item) => Product(
+                  id: item['asset_id'].toString(),
+                  name: item['asset_name'],
+                  imagePath:
+                      // ❌ แก้ไข IP Address ให้ถูกต้อง
+                      "http://192.168.234.1:3000${item['image'] ?? '/public/image/default.jpg'}",
+                  status: item['asset_status'],
+                  statusColor: _getStatusColor(item['asset_status']),
+                ),
+              )
+              .toList();
+        });
+        print("✅ Assets loaded: ${_products.length}");
       } else {
-        print("Failed to load assets: ${response.statusCode}");
+        print("❌ Failed to load assets: ${response.statusCode}");
       }
     } catch (e) {
       print("Error fetching assets: $e");
     }
   }
 
+  // ✅ กำหนดสีตามสถานะ
   Color _getStatusColor(String status) {
     switch (status) {
       case "Available":
@@ -94,283 +105,147 @@ class _StaffState extends State<Staff> {
     }
   }
 
-  // ✅ Toggle Disable/Enable
-  void _toggleDisable(String id) {
-    setState(() {
-      final productIndex = _products.indexWhere((p) => p.id == id);
-      if (productIndex != -1) {
-        _products[productIndex].isReturned =
-            !_products[productIndex].isReturned;
-      }
-    });
-  }
-
-  // ✅ เพิ่มข้อมูลเข้า DB
-  Future<void> _addAsset(
-    String name,
-    String description,
-    File? imageFile,
-  ) async {
-    var uri = Uri.parse("http://192.168.234.1:3000/staff/addAsset");
-    var request = http.MultipartRequest("POST", uri);
-    request.fields["name"] = name;
-    request.fields["description"] = description;
-
-    if (imageFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath("image", imageFile.path),
-      );
-    }
-
-    var response = await request.send();
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Asset added successfully")),
-      );
-      _fetchAssets(); // โหลดข้อมูลใหม่
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("❌ Failed to add asset")));
-    }
-  }
-
-  // ✅ ฟังก์ชันลบข้อมูล
-  Future<void> _deleteAsset(String id) async {
+  // ✅ เพิ่มสินทรัพย์ใหม่
+  Future<void> addAsset(String name, String description, [File? image]) async {
     try {
-      final url = Uri.parse("http://192.168.234.1:3000/staff/deleteAsset/$id");
-      final response = await http.delete(url);
-
-      if (response.statusCode == 200) {
-        final res = jsonDecode(response.body);
-        if (res["success"] == true) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("🗑️ ${res["message"]}")));
-          _fetchAssets(); // โหลดใหม่หลังลบ
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("❌ Failed: ${res["message"]}")),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Server error: ${response.statusCode}")),
+      // ❌ แก้ไข IP Address ให้ถูกต้อง
+      final uri = Uri.parse('http://192.168.234.1:3000/staff/addAsset');
+      var request = http.MultipartRequest('POST', uri);
+      request.fields['name'] = name;
+      request.fields['description'] = description;
+      if (image != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('image', image.path),
         );
       }
+
+      final response = await request.send();
+      final respStr = await response.stream.bytesToString();
+      final data = json.decode(respStr);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        _showPopup("Success", data['message'], true);
+        _fetchAssets(); // reload assets
+      } else {
+        _showPopup("Error", data['message'] ?? 'Something went wrong', false);
+      }
     } catch (e) {
-      print("Error deleting asset: $e");
+      _showPopup("Error", e.toString(), false);
     }
   }
 
-  void _showProductDialog({
-    required String title,
-    required String productName,
-    required String id,
-    bool isEdit = false,
+  // 2. ✅ เพิ่มฟังก์ชันแก้ไขสินทรัพย์
+  Future<void> _editAsset(String id, String name, [File? image]) async {
+    try {
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+      // ❌ แก้ไข IP Address ให้ถูกต้อง
+      final uri = Uri.parse('http://192.168.234.1:3000/staff/editAsset/$id');
+      var request = http.MultipartRequest('PUT', uri);
+      request.headers['Authorization'] = 'Bearer $token'; // เพิ่ม token
+      request.fields['name'] = name;
+      // Note: 'description' is assumed to be required by the backend, even if not editable here.
+      request.fields['description'] =
+          "Sport Equipment"; // ใช้ค่า default หรือดึงจาก product เดิมถ้ามี
+
+      if (image != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('image', image.path),
+        );
+      }
+
+      final response = await request.send();
+      final respStr = await response.stream.bytesToString();
+      final data = json.decode(respStr);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        _showPopup(
+          "Success",
+          data['message'],
+          true,
+          onApply: _fetchAssets,
+        ); // reload assets
+      } else {
+        _showPopup("Error", data['message'] ?? 'Failed to update asset', false);
+      }
+    } catch (e) {
+      _showPopup("Error", "Error updating asset: $e", false);
+    }
+  }
+
+  // ✅ แสดง Popup แจ้งเตือน
+  void _showPopup(
+    String title,
+    String message,
+    bool success, {
+    VoidCallback? onApply,
   }) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        content: _ProductFormDialog(
-          title: title,
-          initialProductName: productName,
-          id: id,
-          onAddAsset: _addAsset,
-          isEdit: isEdit,
-        ),
-      ),
-    );
-  }
-
-  void _navigateToMenu() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const MenuStaff()),
-    );
-  }
-
-  void _navigateToAdd() {
-    _showProductDialog(title: "Add Product", productName: "", id: "New");
-  }
-
-  void _navigateToHistory() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const StaffHistory()),
-    );
-  }
-
-  void _logout() {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const Login()),
-      (route) => false,
-    );
-  }
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-
-    switch (index) {
-      case 0:
-        _navigateToMenu();
-        break;
-      case 2:
-        _navigateToAdd();
-        break;
-      case 3:
-        _navigateToHistory();
-        break;
-      case 4:
-        _logout();
-        break;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-
-      // 🔹 Bottom App Bar with Hover Animation
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.lightBlue[100],
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 4,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(0, Icons.sports_soccer, "Sport\nEquipment"),
-            _buildNavItem(1, Icons.refresh, "Return"),
-            _buildNavItem(2, Icons.add_circle, "Add", largeIcon: true),
-            _buildNavItem(3, Icons.history, "History"),
-            _buildNavItem(4, Icons.logout, "Logout"),
-          ],
-        ),
-      ),
-
-      // 🔹 Main Body
-      body: SafeArea(
-        child: SingleChildScrollView(
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: success ? Colors.green.shade50 : Colors.red.shade50,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                color: Colors.lightBlue[100],
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.black12,
-                      child: Icon(Icons.person, size: 50, color: Colors.black),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "John Doe (Staff)",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+              CircleAvatar(
+                radius: 30,
+                backgroundColor: success ? Colors.green : Colors.red,
+                child: Icon(
+                  success ? Icons.check : Icons.error_outline,
+                  color: Colors.white,
+                  size: 40,
                 ),
               ),
-
-              // Product Table
-              Container(
-                margin: const EdgeInsets.all(8),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.shade300,
-                      blurRadius: 5,
-                      spreadRadius: 1,
-                    ),
-                  ],
+              const SizedBox(height: 15),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: success ? Colors.green.shade800 : Colors.red.shade800,
                 ),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(6),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // ใช้ปุ่มเดียวเพื่อปิด
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade300,
+                      foregroundColor: Colors.black87,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Row(
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: Text("ID", textAlign: TextAlign.center),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text("Product", textAlign: TextAlign.center),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text("Image", textAlign: TextAlign.center),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text("Status", textAlign: TextAlign.center),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text("Actions", textAlign: TextAlign.center),
-                          ),
-                        ],
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 25,
+                        vertical: 12,
                       ),
                     ),
-                    const Divider(),
-                    if (_products.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text(
-                          "No data found...",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      )
-                    else
-                      ..._products.map((product) {
-                        return Column(
-                          children: [
-                            _ProductRow(
-                              id: product.id,
-                              name: product.name,
-                              imagePath: product.imagePath,
-                              status: product.status,
-                              statusColor: product.statusColor,
-                              onEdit: () => _showProductDialog(
-                                title: "Edit Product",
-                                productName: product.name,
-                                id: product.id,
-                                isEdit: true, // ✅ Fix here
-                              ),
-                              onToggleDisable: _toggleDisable,
-                              onDelete: _deleteAsset, // ✅ Add Delete
-                              isReturned: product.isReturned,
-                            ),
-                            const Divider(),
-                          ],
-                        );
-                      }).toList(),
-                  ],
-                ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Close"), // เปลี่ยนเป็น Close
+                  ),
+                  // Removed 'Apply' button for standard success/error popups
+                ],
               ),
             ],
           ),
@@ -379,7 +254,310 @@ class _StaffState extends State<Staff> {
     );
   }
 
-  // 🔹 Bottom Nav Item
+  // 🔹 ฟังก์ชันสลับสถานะ (Enable/Disable) เชื่อมกับ API server
+  Future<void> _toggleAssetStatus(String assetId, String currentStatus) async {
+    try {
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
+      // กำหนด endpoint ตาม currentStatus
+      final endpoint = currentStatus == "Disabled"
+          ? "enable" // Disabled -> Enable
+          : "disable"; // Available -> Disable
+
+      final url = Uri.parse(
+        "http://192.168.234.1:3000/staff/editAsset/$assetId/$endpoint",
+      );
+
+      final response = await http.put(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          _fetchAssets(); // โหลดข้อมูลใหม่
+          _showPopup("Success", data['message'] ?? "Status updated", true);
+        } else {
+          _showPopup(
+            "Error",
+            data['message'] ?? "Failed to change status",
+            false,
+          );
+        }
+      } else {
+        final data = json.decode(response.body);
+        _showPopup(
+          "Error",
+          data['message'] ?? "Failed to change status",
+          false,
+        );
+      }
+    } catch (e) {
+      _showPopup("Error", "Error toggling status: $e", false);
+    }
+  }
+
+  // ✅ ลบสินทรัพย์
+  Future<void> _deleteAsset(String id) async {
+    // เพิ่มการยืนยันก่อนลบ
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Confirm Delete"),
+        content: const Text("Are you sure you want to delete this asset?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final storage = FlutterSecureStorage();
+        final token = await storage.read(key: 'token');
+        // ❌ แก้ไข IP Address ให้ถูกต้อง
+        final url = Uri.parse(
+          "http://192.168.234.1:3000/staff/deleteAsset/$id",
+        );
+        final response = await http.delete(
+          url,
+          headers: {'Authorization': 'Bearer $token'},
+        );
+        if (response.statusCode == 200) {
+          _fetchAssets();
+          _showPopup("Success", "Asset deleted successfully", true);
+        } else {
+          final data = json.decode(response.body);
+          _showPopup(
+            "Error",
+            data['message'] ?? 'Failed to delete asset',
+            false,
+          );
+        }
+      } catch (e) {
+        _showPopup("Error", "Error deleting asset: $e", false);
+      }
+    }
+  }
+
+  // ✅ การจัดการการแตะ Bottom Navigation Bar
+  void _onItemTapped(int i) {
+    setState(() => _selectedIndex = i);
+    switch (i) {
+      case 0:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                MenuStaff(staffId: widget.staffId, username: widget.username),
+          ),
+        );
+        break;
+      case 1:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                Request(staffId: widget.staffId, username: widget.username),
+          ),
+        );
+        break;
+      case 2:
+        // Case 2: Add Asset (เปิด Dialog)
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            content: _ProductFormDialog(
+              title: "Add Asset",
+              initialProductName: "",
+              id: "",
+              onAddAsset: (name, _, image) =>
+                  addAsset(name, "Sport Equipment", image), // ใช้ addAsset เดิม
+            ),
+          ),
+        );
+        break;
+      case 3:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StaffHistory(
+              staffId: widget.staffId,
+              username: widget.username,
+            ),
+          ),
+        );
+        break;
+      case 4:
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const Login()),
+          (route) => false,
+        );
+        break;
+    }
+  }
+
+  // ✅ เปิด Dialog สำหรับแก้ไข
+  void _showEditDialog(Product product) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        content: _ProductFormDialog(
+          title: "Edit Asset",
+          initialProductName: product.name,
+          id: product.id,
+          isEdit: true, // ตั้งเป็นโหมดแก้ไข
+          onAddAsset: (name, _, image) =>
+              _editAsset(product.id, name, image), // ใช้ _editAsset
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      bottomNavigationBar: _buildBottomNavBar(),
+      body: SafeArea(
+        // 2. ✅ เพิ่ม RefreshIndicator
+        child: RefreshIndicator(
+          onRefresh:
+              _fetchAssets, // เรียกฟังก์ชันโหลดข้อมูลเมื่อ Pull-to-refresh
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(), // ทำให้ดึงลงได้เสมอ
+            child: Column(children: [_buildHeader(), _buildTable()]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ❌ _buildHeader, _buildBottomNavBar, _buildNavItem ยังคงเดิม
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity, // เต็มแนวนอน
+      height: 200, // กำหนดความสูง หรือใช้ MediaQuery
+      color: Colors.lightBlue[100],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircleAvatar(
+            radius: 40,
+            backgroundColor: Colors.black12,
+            child: Icon(Icons.person, size: 50, color: Colors.black),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "${widget.username}",
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const Text(
+            "(Staff)",
+            style: TextStyle(fontSize: 16, color: Colors.black54),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTable() {
+    return Container(
+      margin: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade300,
+            blurRadius: 5,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Row(
+              children: [
+                Expanded(child: Text("ID", textAlign: TextAlign.center)),
+                Expanded(child: Text("Product", textAlign: TextAlign.center)),
+                Expanded(child: Text("Image", textAlign: TextAlign.center)),
+                Expanded(child: Text("Status", textAlign: TextAlign.center)),
+                Expanded(child: Text("Actions", textAlign: TextAlign.center)),
+              ],
+            ),
+          ),
+          const Divider(),
+          ..._products.map((p) {
+            return Column(
+              children: [
+                _ProductRow(
+                  id: p.id,
+                  name: p.name,
+                  imagePath: p.imagePath,
+                  status: p.status,
+                  statusColor: p.statusColor,
+                  isReturned: p.isReturned,
+                  onEdit: () =>
+                      _showEditDialog(p), // ✅ ผูกกับฟังก์ชันเปิด Dialog แก้ไข
+                  onToggleDisable: (id) => _toggleAssetStatus(
+                    id,
+                    p.status,
+                  ), // 1. ✅ ผูกกับฟังก์ชันสลับสถานะและส่ง status ปัจจุบัน
+                  onDelete: _deleteAsset,
+                ),
+                const Divider(),
+              ],
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNavBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.lightBlue[100],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildNavItem(0, Icons.sports_soccer, "Menu"),
+          _buildNavItem(1, Icons.refresh, "Return"),
+          _buildNavItem(2, Icons.add_circle_outline, "Add", largeIcon: true),
+          _buildNavItem(3, Icons.history, "History"),
+          _buildNavItem(4, Icons.logout, "Logout"),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNavItem(
     int index,
     IconData icon,
@@ -387,83 +565,44 @@ class _StaffState extends State<Staff> {
     bool largeIcon = false,
   }) {
     final bool isSelected = _selectedIndex == index;
-    final bool isHovering = _hoverIndex == index;
-
     return MouseRegion(
       onEnter: (_) => setState(() => _hoverIndex = index),
       onExit: (_) => setState(() => _hoverIndex = -1),
       cursor: SystemMouseCursors.click,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-        transform: Matrix4.identity()..scale(isHovering ? 1.15 : 1.0),
-        child: GestureDetector(
-          onTap: () => _onItemTapped(index),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.white
-                      : isHovering
-                      ? Colors.white.withOpacity(0.5)
-                      : Colors.transparent,
-                  shape: BoxShape.circle,
-                  boxShadow: isHovering
-                      ? [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Icon(
-                  icon,
-                  size: largeIcon ? 42 : 30,
-                  color: isSelected
-                      ? Colors.purple
-                      : isHovering
-                      ? Colors.deepPurple
-                      : Colors.black,
-                ),
+      child: GestureDetector(
+        onTap: () => _onItemTapped(index),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: largeIcon ? 42 : 28,
+              color: isSelected ? Colors.purple : Colors.black,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: isSelected ? Colors.purple : Colors.black,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isSelected
-                      ? Colors.purple
-                      : isHovering
-                      ? Colors.deepPurple
-                      : Colors.black,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// 🧩 Product Row
+// ✅ Widget แถวข้อมูลสินทรัพย์
 class _ProductRow extends StatelessWidget {
-  final String id;
-  final String name;
-  final String imagePath;
-  final String status;
+  final String id, name, imagePath, status;
   final Color statusColor;
   final VoidCallback onEdit;
-  final Function(String id) onToggleDisable;
-  final Function(String id) onDelete;
+  final Function(String) onToggleDisable;
+  final Function(String) onDelete;
   final bool isReturned;
 
   const _ProductRow({
@@ -480,110 +619,96 @@ class _ProductRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color disableButtonColor = isReturned
-        ? Colors.green
-        : Colors.red.shade400;
-    final String disableButtonLabel = isReturned ? "Enable" : "Disable";
-    final IconData disableButtonIcon = isReturned ? Icons.check : Icons.block;
+    // 1. ✅ กำหนดข้อความและสีปุ่ม Disable/Enable
+    final bool isDisabled = status == "Disabled";
+    final String toggleButtonText = isDisabled ? "Enable" : "Disable";
+    final Color toggleButtonColor = isDisabled
+        ? Colors.green.shade700
+        : Colors.red.shade700;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(flex: 1, child: Text(id, textAlign: TextAlign.center)),
-          Expanded(flex: 2, child: Text(name, textAlign: TextAlign.center)),
-          Expanded(
-            flex: 2,
-            child: Center(
-              child: CircleAvatar(
-                backgroundImage: NetworkImage(imagePath),
-                radius: 20,
+    return Row(
+      children: [
+        Expanded(child: Text(id, textAlign: TextAlign.center)),
+        Expanded(child: Text(name, textAlign: TextAlign.center)),
+        Expanded(
+          child: Center(
+            child: CircleAvatar(
+              backgroundImage: NetworkImage(imagePath),
+              radius: 20,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            status,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Edit ปุ่มสีน้ำเงิน
+              ElevatedButton(
+                onPressed: onEdit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(80, 35), // กำหนดความกว้างและสูง
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  "Edit",
+                  style: TextStyle(fontSize: 12),
+                ), // ขนาดปุ่ม
               ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              status,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: Column(
-              children: [
-                _MiniActionButton(
-                  icon: Icons.edit,
-                  color: Colors.teal.shade300,
-                  label: "Edit",
-                  onPressed: onEdit,
+              const SizedBox(height: 6),
+              // Enable/Disable ปุ่มสีเขียว/แดง
+              ElevatedButton(
+                onPressed: () => onToggleDisable(id),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: toggleButtonColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(80, 35),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                const SizedBox(height: 6),
-                _MiniActionButton(
-                  icon: disableButtonIcon,
-                  color: disableButtonColor,
-                  label: disableButtonLabel,
-                  onPressed: () => onToggleDisable(id),
+                child: Text(
+                  toggleButtonText,
+                  style: const TextStyle(fontSize: 10),
                 ),
-                const SizedBox(height: 6),
-                _MiniActionButton(
-                  icon: Icons.delete,
-                  color: Colors.grey.shade700,
-                  label: "Delete",
-                  onPressed: () => onDelete(id),
+              ),
+              const SizedBox(height: 6),
+              // Delete ปุ่มสีเทา
+              ElevatedButton(
+                onPressed: () => onDelete(id),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey.shade700,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(80, 35),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              ],
-            ),
+                child: const Text("Delete", style: TextStyle(fontSize: 12)),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-// 🧩 Mini Action Button
-class _MiniActionButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String label;
-  final VoidCallback onPressed;
-
-  const _MiniActionButton({
-    required this.icon,
-    required this.color,
-    required this.label,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 85,
-      height: 28,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        icon: Icon(icon, size: 14, color: Colors.white),
-        label: Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: Colors.white),
-        ),
-      ),
-    );
-  }
-}
-
-// 🧩 Product Form Dialog
+// ✅ Widget Dialog สำหรับเพิ่ม/แก้ไขสินทรัพย์
 class _ProductFormDialog extends StatefulWidget {
-  final String title;
-  final String initialProductName;
-  final String id;
+  final String title, initialProductName, id;
   final bool isEdit;
+  // 2. ✅ แก้ไข onAddAsset/onEditAsset ให้รองรับการทำงานแบบเดียวกัน
   final Future<void> Function(String, String, File?) onAddAsset;
 
   const _ProductFormDialog({
@@ -599,149 +724,145 @@ class _ProductFormDialog extends StatefulWidget {
 }
 
 class _ProductFormDialogState extends State<_ProductFormDialog> {
-  final TextEditingController productNameController = TextEditingController();
-  File? _selectedImage;
+  final TextEditingController controller = TextEditingController();
+  File? image;
+  bool _isLoading = false; // สำหรับป้องกันกดซ้ำ
 
-  Future<void> _pickImage() async {
+  @override
+  void initState() {
+    super.initState();
+    controller.text = widget.initialProductName;
+  }
+
+  // เลือกรูปภาพ
+  Future<void> pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
-      setState(() {
-        _selectedImage = File(picked.path);
-      });
+      setState(() => image = File(picked.path));
     }
   }
 
-  Future<void> _updateAsset(String name, File? imageFile) async {
+  // แสดง Popup
+  void _showPopup(String title, String message, bool success) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // เรียก onAddAsset พร้อม handle success/fail
+  Future<void> _handleSubmit() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
     try {
-      var uri = Uri.parse(
-        "http://192.168.234.1:3000/staff/editAsset/${widget.id}",
+      await widget.onAddAsset(controller.text, "Sport Equipment", image);
+      _showPopup(
+        "Success",
+        widget.isEdit
+            ? "Asset updated successfully"
+            : "Asset added successfully",
+        true,
       );
-      var request = http.MultipartRequest("PUT", uri);
-      request.fields["name"] = name;
-      request.fields["description"] = "Sport Equipment";
-
-      if (imageFile != null) {
-        request.files.add(
-          await http.MultipartFile.fromPath("image", imageFile.path),
-        );
-      }
-
-      var response = await request.send();
-      var resBody = await response.stream.bytesToString();
-      var resJson = jsonDecode(resBody);
-
-      if (response.statusCode == 200 && resJson["success"] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Asset updated successfully")),
-        );
-        (context.findAncestorStateOfType<_StaffState>())
-            ?._fetchAssets(); // ✅ reload
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Failed: ${resJson["message"] ?? ''}")),
-        );
-      }
+      Navigator.pop(context); // ปิด dialog หลัง success
     } catch (e) {
-      print("Error updating asset: $e");
+      _showPopup("Error", e.toString(), false);
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    productNameController.text = widget.initialProductName;
-
-    return Container(
-      width: 300,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey.shade400, width: 1),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              widget.isEdit ? "Edit Asset ID ${widget.id}" : "Add New Asset",
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: "Product name",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 15),
+            OutlinedButton.icon(
+              onPressed: pickImage,
+              icon: const Icon(Icons.image),
+              label: Text(widget.isEdit ? "Change Image" : "Choose Image"),
+            ),
+            if (image != null) ...[
+              const SizedBox(height: 10),
+              Image.file(image!, height: 100),
+            ],
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                const Text(
-                  "Product name",
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: productNameController,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
+                // Cancel
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 30,
+                      vertical: 15,
+                    ),
+                    shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Image",
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: _pickImage,
-                  child: const Text("📸 Choose Image"),
-                ),
-                if (_selectedImage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Image.file(_selectedImage!, height: 100),
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text("Cancel"),
                 ),
-                const SizedBox(width: 10),
+                // Save/Add
                 ElevatedButton(
-                  onPressed: () async {
-                    final name = productNameController.text.trim();
-                    if (name.isEmpty) return;
-
-                    if (widget.isEdit) {
-                      await _updateAsset(name, _selectedImage);
-                    } else {
-                      await widget.onAddAsset(
-                        name,
-                        "Sport Equipment",
-                        _selectedImage,
-                      );
-                    }
-
-                    if (mounted) Navigator.pop(context);
-                  },
+                  onPressed: _handleSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor: widget.isEdit
+                        ? Colors.lightGreen
+                        : Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 30,
+                      vertical: 15,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                  child: Text(widget.isEdit ? "Save Changes" : "Apply"),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(widget.isEdit ? "Save Changes" : "Add Asset"),
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

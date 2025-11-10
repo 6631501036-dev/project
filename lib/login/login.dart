@@ -67,9 +67,14 @@ class _LoginState extends State<Login> {
             );
             break;
           case 'staff':
+            int staffId = payload['user_id']; // ✅ ดึงจาก payload ของ JWT
+            String username = payload['username'];
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const Staff()),
+              MaterialPageRoute(
+                builder: (context) =>
+                    Staff(staffId: staffId, username: username),
+              ),
             );
             break;
           case 'lender':
