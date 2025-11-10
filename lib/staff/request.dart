@@ -17,33 +17,92 @@ class Request extends StatefulWidget {
 }
 
 class _RequestState extends State<Request> {
-  List products = [];
+  List requests = [];
   bool isLoading = true;
+  bool isError = false;
   int _hoverIndex = -1;
-  int _selectedIndex = 1; // ✅ หน้า Request เป็นหน้า index 1
+  int _selectedIndex = 1;
 
-  // โหลดข้อมูล request ของ staff
+  // โหลดข้อมูล request จาก server
   Future<void> fetchRequests() async {
     try {
       final res = await http.get(
         Uri.parse("http://192.168.234.1:3000/staff/request/${widget.staffId}"),
       );
+
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         if (data["success"] == true) {
           setState(() {
-            products = data["requests"];
+            requests = data["requests"];
             isLoading = false;
+            isError = false;
           });
         } else {
-          setState(() => isLoading = false);
+          setState(() {
+            isError = true;
+            isLoading = false;
+          });
         }
       } else {
-        setState(() => isLoading = false);
+        setState(() {
+          isError = true;
+          isLoading = false;
+        });
       }
     } catch (e) {
-      debugPrint("Error fetching data: $e");
-      setState(() => isLoading = false);
+      debugPrint("❌ Fetch error: $e");
+      setState(() {
+        isLoading = false;
+        isError = true;
+      });
+    }
+  }
+
+  // ✅ ฟังก์ชันคืนของ (PUT)
+  // request.dart (ในฟังก์ชัน Future<void> returnAsset(int requestId))
+  // ✅ ฟังก์ชันคืนของ (PUT)
+  Future<void> returnAsset(int requestId) async {
+    try {
+      final res = await http.put(
+        Uri.parse("http://192.168.234.1:3000/staff/returnAsset/$requestId"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"staff_id": widget.staffId}),
+      );
+
+      if (res.statusCode == 200) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("✅ คืนอุปกรณ์สำเร็จ")));
+        fetchRequests(); // โหลดใหม่หลังคืนสำเร็จ
+      } else {
+        // --- ส่วนที่แก้ไข: จัดการข้อความผิดพลาดให้ชัดเจนขึ้น ---
+        String errorMessage = 'เกิดข้อผิดพลาดในการคืนอุปกรณ์';
+        try {
+          final errorBody = json.decode(res.body);
+          // ดึง message จาก Server (เช่น "Request not found or already returned")
+          errorMessage =
+              errorBody['message'] ??
+              'ข้อผิดพลาดไม่ทราบสาเหตุ (Status: ${res.statusCode})';
+        } catch (e) {
+          // หาก Server ไม่ได้ส่ง JSON ที่ถูกต้องกลับมา
+          errorMessage = res.body.isNotEmpty
+              ? res.body
+              : 'Server Error (Status: ${res.statusCode})';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("❌ คืนอุปกรณ์ไม่สำเร็จ: $errorMessage")),
+        );
+        // ----------------------------------------------------
+      }
+    } catch (e) {
+      debugPrint("Error PUT returnAsset: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์"),
+        ),
+      );
     }
   }
 
@@ -67,7 +126,6 @@ class _RequestState extends State<Request> {
         );
         break;
       case 1:
-        // อยู่หน้า Request แล้ว
         break;
       case 2:
         Navigator.pushReplacement(
@@ -99,6 +157,16 @@ class _RequestState extends State<Request> {
     }
   }
 
+  // ฟังก์ชันแปลงวันที่ (ตัดเวลาออก)
+  String _formatDate(String? dateString) {
+    if (dateString == null || dateString.isEmpty) return '-';
+    try {
+      return DateTime.parse(dateString).toLocal().toString().split(' ')[0];
+    } catch (_) {
+      return dateString.split(' ')[0]; // fallback ถ้า format ไม่ตรง
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -107,6 +175,8 @@ class _RequestState extends State<Request> {
       body: SafeArea(
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
+            : isError
+            ? _buildErrorView()
             : SingleChildScrollView(
                 child: Column(children: [_buildHeader(), _buildTable()]),
               ),
@@ -116,6 +186,8 @@ class _RequestState extends State<Request> {
 
   Widget _buildHeader() {
     return Container(
+      width: double.infinity,
+      height: 150,
       color: Colors.lightBlue[100],
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -130,10 +202,29 @@ class _RequestState extends State<Request> {
             "${widget.username} (Staff)",
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            "Return / Request Page",
-            style: TextStyle(color: Colors.black54),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red, size: 60),
+          const SizedBox(height: 10),
+          const Text("ไม่สามารถโหลดข้อมูลได้", style: TextStyle(fontSize: 16)),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                isLoading = true;
+                isError = false;
+              });
+              fetchRequests();
+            },
+            child: const Text("ลองอีกครั้ง"),
           ),
         ],
       ),
@@ -173,11 +264,13 @@ class _RequestState extends State<Request> {
                 Expanded(
                   child: Text("Return Date", textAlign: TextAlign.center),
                 ),
+                Expanded(child: Text("Status", textAlign: TextAlign.center)),
+                Expanded(child: Text("Action", textAlign: TextAlign.center)),
               ],
             ),
           ),
           const Divider(),
-          if (products.isEmpty)
+          if (requests.isEmpty)
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
@@ -186,31 +279,62 @@ class _RequestState extends State<Request> {
               ),
             )
           else
-            ...products.map((p) {
+            ...requests.map((r) {
               return Column(
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: Text("${p['id']}", textAlign: TextAlign.center),
-                      ),
-                      Expanded(
                         child: Text(
-                          "${p['name']}",
+                          "${r['id']}",
                           textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 15),
                         ),
                       ),
                       Expanded(
                         child: Text(
-                          "${p['borrowDate'] ?? '-'}",
+                          "${r['name']}",
                           textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12),
                         ),
                       ),
                       Expanded(
                         child: Text(
-                          "${p['returnDate'] ?? '-'}",
+                          _formatDate(r['borrowDate']),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          _formatDate(r['returnDate']),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          "${r['returnStatus'] ?? '-'}",
                           textAlign: TextAlign.center,
                         ),
+                      ),
+                      Expanded(
+                        child: (r['returnStatus'] == 'Requested Return')
+                            ? ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.deepPurpleAccent,
+                                ),
+                                onPressed: () => returnAsset(r['id']),
+                                child: const Text(
+                                  "Return",
+                                  style: TextStyle(color: Colors.black),
+                                ),
+                              )
+                            : const Text(
+                                "-",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey),
+                              ),
                       ),
                     ],
                   ),
@@ -223,6 +347,7 @@ class _RequestState extends State<Request> {
     );
   }
 
+  // ส่วนของ Bottom Navigation Bar
   Widget _buildBottomBar() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),

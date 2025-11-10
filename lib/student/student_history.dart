@@ -1,207 +1,348 @@
-// import 'package:flutter/material.dart';
-// import 'package:http/http.dart' as http;
-// import 'dart:convert';
-// import 'package:shared_preferences/shared_preferences.dart';
-
-// class HistoryRecord {
-//   final String id, item, borrowDate, returnDate, lender, staff, status;
-//   const HistoryRecord({
-//     required this.id,
-//     required this.item,
-//     required this.borrowDate,
-//     required this.returnDate,
-//     required this.lender,
-//     required this.staff,
-//     required this.status,
-//   });
-
-//   factory HistoryRecord.fromJson(Map<String, dynamic> json) => HistoryRecord(
-//     id: json['request_id'].toString(),
-//     item: json['asset_name'] ?? '-',
-//     borrowDate: json['borrow_date']?.toString().split('T').first ?? '-',
-//     returnDate: json['return_date']?.toString().split('T').first ?? '-',
-//     lender: json['lender_name'] ?? '-',
-//     staff: json['staff_name'] ?? '-',
-//     status: json['approval_status'] ?? '-',
-//   );
-// }
-
-// class StudentHistory extends StatefulWidget {
-//   const StudentHistory({super.key});
-//   @override
-//   State<StudentHistory> createState() => _StudentHistoryState();
-// }
-
-// class _StudentHistoryState extends State<StudentHistory> {
-//   final String baseUrl = "http://192.168.234.1:3000";
-//   int? borrowerId;
-//   String? username;
-//   bool _loading = true;
-//   List<HistoryRecord> _records = [];
-
-//   @override
-//   void initState() {
-//     super.initState();
-//     _loadUserAndFetch();
-//   }
-
-//   Future<void> _loadUserAndFetch() async {
-//     final prefs = await SharedPreferences.getInstance();
-//     final token = prefs.getString('token');
-//     if (token == null) return;
-//     final data = json.decode(token);
-//     borrowerId = data['user_id'];
-//     username = data['username'];
-//     await _fetchHistory();
-//   }
-
-//   Future<void> _fetchHistory() async {
-//     if (borrowerId == null) return;
-//     setState(() => _loading = true);
-//     try {
-//       final res = await http.get(
-//         Uri.parse("$baseUrl/borrower/history/$borrowerId"),
-//       );
-//       final body = json.decode(res.body);
-//       if (body['success']) {
-//         _records = List<HistoryRecord>.from(
-//           body['history'].map((x) => HistoryRecord.fromJson(x)),
-//         );
-//       }
-//     } catch (e) {
-//       print("Fetch history error: $e");
-//     } finally {
-//       setState(() => _loading = false);
-//     }
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       backgroundColor: Colors.lightBlue[100],
-//       appBar: AppBar(
-//         title: Text(username ?? "History"),
-//         backgroundColor: Colors.blue[200],
-//       ),
-//       body: _loading
-//           ? const Center(child: CircularProgressIndicator())
-//           : _records.isEmpty
-//           ? const Center(child: Text("No history found"))
-//           : ListView.builder(
-//               padding: const EdgeInsets.all(16),
-//               itemCount: _records.length,
-//               itemBuilder: (context, i) {
-//                 final r = _records[i];
-//                 return Card(
-//                   child: ListTile(
-//                     title: Text(r.item),
-//                     subtitle: Text(
-//                       "Borrowed: ${r.borrowDate} → ${r.returnDate}\nStatus: ${r.status}",
-//                     ),
-//                   ),
-//                 );
-//               },
-//             ),
-//     );
-//   }
-// }
-
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_1/login/login.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-class StudentHistory extends StatefulWidget {
-  const StudentHistory({super.key});
+class Student_history extends StatefulWidget {
+  const Student_history({super.key});
 
   @override
-  State<StudentHistory> createState() => _StudentHistoryState();
+  State<Student_history> createState() => _Student_historyState();
 }
 
-class _StudentHistoryState extends State<StudentHistory> {
-  int? borrowerId;
-  List<dynamic> history = [];
-  final String baseUrl = "http://192.168.234.1:3000";
+class _Student_historyState extends State<Student_history> {
+  final String baseUrl = "http://192.168.234.1:3000/api";
+  int? userId;
+
+  bool _isLoading = true;
+  List<HistoryItem> _historyItems = [];
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _loadUserAndFetch();
   }
 
-  Future<void> _loadUserData() async {
-    final storage = await SharedPreferences.getInstance();
-    final token = storage.getString('token');
-    if (token != null) {
-      final data = json.decode(token);
-      setState(() {
-        borrowerId = data['user_id'];
-      });
-      await fetchHistory();
+  Future<void> _loadUserAndFetch() async {
+    // ========== ดึง user_id จาก token ==========
+    final storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
+
+    final jwt = JWT.decode(token!);
+    Map playload = jwt.payload;
+
+    userId = playload['user_id'] as int;
+
+    if (userId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please login again.")));
+      setState(() => _isLoading = false);
+      return;
     }
+    await _fetchData();
   }
 
-  Future<void> fetchHistory() async {
-    if (borrowerId == null) return;
+  Future<void> _fetchData() async {
+    if (userId == null) return;
+    setState(() {
+      _isLoading = true;
+      _historyItems = [];
+    });
 
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/borrower/history/$borrowerId"),
-      );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['success'] == true) {
-          setState(() {
-            history = data['history'];
-          });
+      final response = await http
+          .get(Uri.parse('$baseUrl/student/history/$userId'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200 && mounted) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          _historyItems = data
+              .map((jsonItem) => HistoryItem.fromJson(jsonItem))
+              .toList();
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to load history: ${response.statusCode}'),
+            ),
+          );
         }
       }
     } catch (e) {
-      print("Fetch history error: $e");
+      print("Error fetching history: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Network error while loading history")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Confirm Logout"),
+        content: const Text("Are you sure you want to log out?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final appBarHeight = AppBar().preferredSize.height;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = 16.0;
+    final minCardHeight =
+        screenHeight - appBarHeight - topPadding - bottomPadding;
+
     return Scaffold(
+      backgroundColor: Colors.blue.shade100,
       appBar: AppBar(
-        title: const Text("Borrowing History"),
-        backgroundColor: Colors.blue.shade300,
-      ),
-      body: RefreshIndicator(
-        onRefresh: fetchHistory,
-        child: ListView.builder(
-          padding: const EdgeInsets.all(10),
-          itemCount: history.length,
-          itemBuilder: (context, index) {
-            final item = history[index];
-            return Card(
-              elevation: 2,
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              child: ListTile(
-                leading: Image.network(
-                  "$baseUrl${item['image']}",
-                  width: 50,
-                  height: 50,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      Image.asset("assets/default.jpg", width: 50, height: 50),
-                ),
-                title: Text(item['asset_name'] ?? "Unknown"),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Borrow: ${item['borrow_date'] ?? '-'}"),
-                    Text("Return: ${item['return_date'] ?? '-'}"),
-                    Text("Approval: ${item['approval_status'] ?? '-'}"),
-                    Text("Return Status: ${item['return_status'] ?? '-'}"),
-                  ],
-                ),
-              ),
-            );
+        backgroundColor: Colors.blue.shade100,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          onPressed: () {
+            if (Navigator.canPop(context)) Navigator.pop(context);
           },
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Colors.black),
+            onPressed: _logout,
+          ),
+        ],
       ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _fetchData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: minCardHeight),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30.0),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 24.0),
+                          _buildHistorySection(items: _historyItems),
+                          const SizedBox(height: 24.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildHistorySection({required List<HistoryItem> items}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Center(
+            child: Text(
+              'History',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 12.0),
+          if (items.isEmpty)
+            const Center(
+              child: Text(
+                'No history found.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                return _buildHistoryCard(item: items[index]);
+              },
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: 12.0),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryCard({required HistoryItem item}) {
+    Color getStatusColor(String status) {
+      if (status == 'Returned') return Colors.green;
+      if (status == 'Rejected') return Colors.red;
+      return Colors.grey;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.0),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.05),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.item,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.dateRange,
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.status,
+                style: TextStyle(
+                  color: getStatusColor(item.status),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Lender',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              Text(
+                item.lender,
+                style: const TextStyle(color: Colors.black, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Returned',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              Text(
+                item.returnedBy,
+                style: const TextStyle(color: Colors.black, fontSize: 14),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HistoryItem {
+  final String item;
+  final String dateRange;
+  final String lender;
+  final String returnedBy;
+  final String status;
+
+  HistoryItem({
+    required this.item,
+    required this.dateRange,
+    required this.lender,
+    required this.returnedBy,
+    required this.status,
+  });
+
+  factory HistoryItem.fromJson(Map<String, dynamic> json) {
+    String formatDate(String? dateStr) {
+      if (dateStr == null) return 'N/A';
+      try {
+        final DateTime utcDateTime = DateTime.parse(dateStr);
+        //แปลงจากเวลา UTC ให้เป็น "เวลาของเครื่อง" (Local Time)
+        final DateTime localDateTime = utcDateTime.toLocal();
+        return localDateTime.toString().split(' ')[0];
+      } catch (e) {
+        return dateStr.split('T')[0];
+      }
+    }
+
+    final String dateRange =
+        "${formatDate(json['borrow_date'])} - ${formatDate(json['return_date'])}";
+
+    final String requestStatus = json['request_status'] ?? 'Unknown';
+    final String returnStatus = json['return_status'];
+
+    String finalStatus;
+    String finalReturnedBy = '-';
+
+    if (returnStatus == 'Returned') {
+      // กรณี "คืนแล้ว": คือสถานะสุดท้าย
+      finalStatus = 'Returned';
+      finalReturnedBy = json['staff_name'] ?? 'Returned'; // แสดงชื่อ Staff
+    } else {
+      // กรณี "ยังไม่คืน": ให้ใช้สถานะการอนุมัติ
+      finalStatus = requestStatus;
+    }
+    return HistoryItem(
+      item: json['asset_name'] ?? 'Unknown Item',
+      dateRange: dateRange,
+      lender: json['lender_name'] ?? '-',
+      returnedBy: finalReturnedBy,
+      status: finalStatus,
     );
   }
 }

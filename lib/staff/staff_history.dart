@@ -115,41 +115,45 @@ class _StaffHistoryState extends State<StaffHistory> {
               const SizedBox(height: 10),
               Card(
                 elevation: 4,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text("ID")),
-                    DataColumn(label: Text("Item")),
-                    DataColumn(label: Text("Borrow Date")),
-                    DataColumn(label: Text("Return Date")),
-                    DataColumn(label: Text("Student")),
-                    DataColumn(label: Text("Lender")),
-                    DataColumn(label: Text("Staff")),
-                    DataColumn(label: Text("Status")),
-                  ],
-                  rows: _records
-                      .map(
-                        (r) => DataRow(
-                          cells: [
-                            DataCell(Text(r["id"]!)),
-                            DataCell(Text(r["item"]!)),
-                            DataCell(Text(r["borrow"]!)),
-                            DataCell(Text(r["return"]!)),
-                            DataCell(Text(r["student"]!)),
-                            DataCell(Text(r["lender"]!)),
-                            DataCell(Text(r["staff"]!)),
-                            DataCell(
-                              Text(
-                                r["status"]!,
-                                style: TextStyle(
-                                  color: _getStatusColor(r["status"]!),
-                                  fontWeight: FontWeight.bold,
+                child: SingleChildScrollView(
+                  scrollDirection:
+                      Axis.horizontal, // 👈 allows horizontal scrolling
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text("ID")),
+                      DataColumn(label: Text("Item")),
+                      DataColumn(label: Text("Borrow Date")),
+                      DataColumn(label: Text("Return Date")),
+                      DataColumn(label: Text("Student")),
+                      DataColumn(label: Text("Lender")),
+                      DataColumn(label: Text("Staff")),
+                      DataColumn(label: Text("Status")),
+                    ],
+                    rows: _records
+                        .map(
+                          (r) => DataRow(
+                            cells: [
+                              DataCell(Text(r["id"]!)),
+                              DataCell(Text(r["item"]!)),
+                              DataCell(Text(r["borrow"]!)),
+                              DataCell(Text(r["return"]!)),
+                              DataCell(Text(r["student"]!)),
+                              DataCell(Text(r["lender"]!)),
+                              DataCell(Text(r["staff"]!)),
+                              DataCell(
+                                Text(
+                                  r["status"]!,
+                                  style: TextStyle(
+                                    color: _getStatusColor(r["status"]!),
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      )
-                      .toList(),
+                            ],
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ),
               ),
             ],

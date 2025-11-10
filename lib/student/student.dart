@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'student_history.dart';
 import 'student_status.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 class Student extends StatefulWidget {
   const Student({super.key});
@@ -14,11 +16,13 @@ class Student extends StatefulWidget {
 }
 
 class _StudentState extends State<Student> with RouteAware {
-  final String baseApi = "http://192.168.110.142:3000/api";
+  final String baseApi = "http://192.168.234.1:3000/api";
   int? borrowerId; // user_id
   List<Map<String, dynamic>> equipmentList = [];
   Map<String, dynamic>? _activeStatusItem;
   bool _loading = true;
+
+  int canBorrowToday = 1;
 
   @override
   void initState() {
@@ -46,13 +50,18 @@ class _StudentState extends State<Student> with RouteAware {
   Future<void> fetchAssets() async {
     setState(() {
       _loading = true;
-      _activeStatusItem = null; // รีเซ็ตสถานะก่อนโหลด
+      _activeStatusItem = null;
+      // รีเซ็ตสถานะก่อนโหลด
     });
+    // default = 1
+    // ========== ดึง user_id จาก token ==========
+    final storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
 
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getInt('user_id');
+    final jwt = JWT.decode(token!);
+    Map playload = jwt.payload;
 
-    if (userId == null) {
+    if (token == null) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -62,26 +71,39 @@ class _StudentState extends State<Student> with RouteAware {
       return;
     }
 
-    borrowerId = userId;
+    borrowerId = playload['user_id'] as int;
 
     try {
       // --- API ตัวที่ 1: เช็กสถานะ ---
-      final statusUrl = Uri.parse('$baseApi/student/status/$userId');
+      final statusUrl = Uri.parse('$baseApi/student/status/$borrowerId');
       final statusResponse = await http
           .get(statusUrl)
           .timeout(const Duration(seconds: 10));
 
       if (statusResponse.statusCode == 200) {
         final statusData = jsonDecode(statusResponse.body);
-        if (statusData != null) {
-          setState(() {
-            _activeStatusItem = statusData as Map<String, dynamic>;
-          });
-        }
+
+        setState(() {
+          if (statusData != null) {
+            canBorrowToday = statusData['can_borrow_today'] ?? 0;
+
+            final String assetStatus = statusData['asset_status'] ?? '';
+            _activeStatusItem =
+                (assetStatus == 'Pending' || assetStatus == 'Borrowed') &&
+                    statusData['return_status'] != 'Returned'
+                ? statusData as Map<String, dynamic>
+                : null;
+          } else {
+            canBorrowToday = 1; // default value
+            _activeStatusItem = null;
+          }
+        });
       }
 
       // --- API ตัวที่ 2: ดึงรายการอุปกรณ์ ---
-      final assetUrl = Uri.parse('$baseApi/student/asset?borrower_id=$userId');
+      final assetUrl = Uri.parse(
+        '$baseApi/student/asset?borrower_id=$borrowerId',
+      );
       final assetResponse = await http
           .get(assetUrl)
           .timeout(const Duration(seconds: 10));
@@ -158,8 +180,10 @@ class _StudentState extends State<Student> with RouteAware {
   }
 
   Future<bool> _hasActiveRequest() async {
-    // เช็กจากตัวแปร State ที่โหลดมา
-    return _activeStatusItem != null;
+    if (_activeStatusItem == null) return false;
+
+    final status = _activeStatusItem!['asset_status']?.toString();
+    return status == 'Pending' || status == 'Borrowed';
   }
 
   Future<void> confirmBorrow(int assetId, String assetName) async {
@@ -261,20 +285,17 @@ class _StudentState extends State<Student> with RouteAware {
       if (res.statusCode == 200) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("Return request sent ✅")));
-        await fetchAssets();
+        ).showSnackBar(const SnackBar(content: Text("Return successful ✅")));
+        await fetchAssets(); // reload assets & status
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Request return failed: ${res.statusCode}")),
+          SnackBar(content: Text("Return failed: ${res.statusCode}")),
         );
       }
     } catch (e) {
-      print("Return request error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Network error while requesting return"),
-          ),
+          const SnackBar(content: Text("Network error during return")),
         );
       }
     }
@@ -297,15 +318,18 @@ class _StudentState extends State<Student> with RouteAware {
     }
   }
 
+  // อย่าลืมเปลี่ยน IP ด้วยเดี๋ยวรูปไม่ขึ้น
+  final String imageBaseUrl = "http://192.168.234.1:3000";
+  // อย่าลืมเปลี่ยน IP ด้วยเดี๋ยวรูปไม่ขึ้น
+  // 🟢 แก้ไขฟังก์ชันนี้
   String buildImageUrl(String? imageField) {
+    // 1. กรณีที่ไม่มีรูปภาพ (null หรือ empty)
     if (imageField == null || imageField.isEmpty) {
-      return "http://192.168.110.142:3000/public/image/default.jpg";
+      return "$imageBaseUrl/public/image/default.jpg";
+    } else {
+      // 2. กรณีที่มีรูปภาพ
+      return "$imageBaseUrl$imageField";
     }
-    if (imageField.startsWith("http")) return imageField;
-    if (imageField.contains("/public/image")) {
-      return "http://192.168.110.142:3000${imageField.startsWith('/') ? '' : '/'}$imageField";
-    }
-    return "http://192.168.110.142:3000/public/image/$imageField";
   }
 
   @override
@@ -336,6 +360,7 @@ class _StudentState extends State<Student> with RouteAware {
           ),
         ],
       ),
+
       body: RefreshIndicator(
         onRefresh: fetchAssets,
         child: _loading
@@ -351,6 +376,28 @@ class _StudentState extends State<Student> with RouteAware {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
+                      // ข้อความจำนวนที่สามารถยืมได้
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            if (canBorrowToday > 0)
+                              Icon(Icons.book, color: Colors.blue),
+                            const SizedBox(width: 4),
+                            Text(
+                              "Can borrow today: $canBorrowToday",
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+                      // Row ของปุ่ม 3 ปุ่ม
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -450,6 +497,7 @@ class _StudentState extends State<Student> with RouteAware {
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 20),
                       Column(
                         children: equipmentList.map((item) {
