@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class Student_history extends StatefulWidget {
   const Student_history({super.key});
@@ -26,8 +28,15 @@ class _Student_historyState extends State<Student_history> {
   }
 
   Future<void> _loadUserAndFetch() async {
-    final prefs = await SharedPreferences.getInstance();
-    userId = prefs.getInt('user_id');
+    // ========== ดึง user_id จาก token ==========
+    final storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
+
+    final jwt = JWT.decode(token!);
+    Map playload = jwt.payload;
+
+    userId = playload['user_id'] as int;
+
     if (userId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(
