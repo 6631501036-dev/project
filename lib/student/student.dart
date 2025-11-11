@@ -502,6 +502,7 @@ class _StudentState extends State<Student> with RouteAware {
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 20),
                       Column(
                         children: equipmentList.map((item) {

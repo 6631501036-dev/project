@@ -1,19 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'lender_history.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_1/login/login.dart';
+import 'menu_lender.dart';
 
-// Product Model
-class Product {
-  final String id;
-  final String name;
-  final String imagePath;
+//กำหนด IP ของคุณ
+const String baseIp = "192.168.110.142:3000";
+const String baseUrl = "http://$baseIp";
+
+
+class PendingRequest {
+  final int requestId;
+  final String assetName;
+  final String assetImage;
+  final String borrowerName;
+  final String borrowDate;
   String loanStatus;
 
-  Product({
-    required this.id,
-    required this.name,
-    required this.imagePath,
-    required this.loanStatus,
+  PendingRequest({
+    required this.requestId,
+    required this.assetName,
+    required this.assetImage,
+    required this.borrowerName,
+    required this.borrowDate,
+    this.loanStatus = "Pending",
   });
+
+  factory PendingRequest.fromJson(Map<String, dynamic> json) {
+    return PendingRequest(
+      requestId: json['request_id'],
+      assetName: json['asset_name'],
+      assetImage: "$baseUrl${json['asset_image']}",
+      borrowerName: json['borrower_name'],
+      borrowDate: json['borrow_date'],
+    );
+  }
 }
 
 class Lender extends StatefulWidget {
@@ -24,298 +49,475 @@ class Lender extends StatefulWidget {
 }
 
 class _LenderState extends State<Lender> {
-  final List<Product> _products = [
-    Product(
-      id: "1",
-      name: "Football",
-      imagePath: "asset/image/football.png",
-      loanStatus: "Pending",
-    ),
-    Product(
-      id: "2",
-      name: "Basketball",
-      imagePath: "asset/image/basketball.png",
-      loanStatus: "Pending",
-    ),
-  ];
+  List<PendingRequest> _pendingRequests = [];
+  bool _isLoading = true;
+  String _errorMessage = '';
 
-  void _updateLoanStatus(String id, String newStatus) {
-    if (newStatus == "Disapprove") {
-      TextEditingController reasonController = TextEditingController();
+  int? _lenderId;
+  String? _lenderName;
 
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text("Disapprove Confirmation"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Please provide a reason for disapproval:"),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  hintText: "Enter reason...",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
+  //State Variables สำหรับ dashbroad
+  int _totalAssets = 0;
+  int _availableAssets = 0;
+  int _pendingAssets = 0;
+  int _borrowedAssets = 0;
+  int _disabledAssets = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserDataAndFetchRequests();
+  }
+
+  //ฟังก์ชัน Logout (เหมือนเดิม)
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Confirm Logout"),
+        content: const Text("Are you sure you want to log out?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-              ),
-              onPressed: () {
-                String reason = reasonController.text.trim();
-                if (reason.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Please enter a reason for disapproval."),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                  return;
-                }
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
 
-                Navigator.pop(context);
-                setState(() {
-                  final index = _products.indexWhere((p) => p.id == id);
-                  if (index != -1) {
-                    _products[index].loanStatus = "Disapproved";
-                    // You can store the reason somewhere if needed
-                    // e.g., _products[index].reason = reason;
-                  }
-                });
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      final storage = FlutterSecureStorage();
+      await storage.delete(key: 'token');
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text("Item disapproved. Reason: $reason"),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-              },
-              child: const Text("Confirm"),
-            ),
-          ],
-        ),
-      );
-    } else {
-      // Default confirmation for approve
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text("Approve Confirmation"),
-          content: const Text("Are you sure you want to approve this item?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                setState(() {
-                  final index = _products.indexWhere((p) => p.id == id);
-                  if (index != -1) {
-                    _products[index].loanStatus = "Borrowed";
-                  }
-                });
-              },
-              child: const Text("Confirm"),
-            ),
-          ],
-        ),
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
       );
     }
   }
 
+  //อัปเดตฟังก์ชันนี้ให้ดึง Stats ด้วย
+  Future<void> _loadUserDataAndFetchRequests() async {
+    final storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
+
+    if (token == null) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = "Please login again.";
+      });
+      return;
+    }
+
+    if (!_isLoading) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
+    try {
+      final jwt = JWT.decode(token);
+      Map payload = jwt.payload;
+      setState(() {
+        _lenderId = payload['user_id'] as int;
+        _lenderName = payload['username'] as String;
+      });
+
+      //เรียก API ทั้งสองตัว
+      await Future.wait([_loadData(), _fetchAssetStats()]);
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = "Invalid Token. Please login again. ($e)";
+      });
+    }
+    // (เราจะ set isLoading = false ใน _loadData)
+  }
+
+  // สร้างฟังก์ชันดึงสถิติ
+  Future<void> _fetchAssetStats() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/lender/asset-stats'));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['stats'] != null) {
+          final stats = data['stats'];
+          if (mounted) {
+            setState(() {
+              _totalAssets = int.tryParse(stats['total'].toString()) ?? 0;
+              _availableAssets =
+                  int.tryParse(stats['available'].toString()) ?? 0;
+              _pendingAssets = int.tryParse(stats['pending'].toString()) ?? 0;
+              _borrowedAssets =
+                  int.tryParse(stats['borrowed'].toString()) ?? 0;
+              _disabledAssets =
+                  int.tryParse(stats['disabled'].toString()) ?? 0;
+            });
+          }
+        }
+      } else {
+        print("❌ HTTP Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("⚠️ Error fetching stats: $e");
+    }
+  }
+
+  // (ฟังก์ชัน _loadData)
+  Future<void> _loadData() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/lender/pending-requests'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          List<dynamic> requestsJson = data['pendingRequests'];
+          if (mounted) {
+            setState(() {
+              _pendingRequests = requestsJson
+                  .map((json) => PendingRequest.fromJson(json))
+                  .toList();
+            });
+          }
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Failed to load data (Code: ${response.statusCode})';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error connecting to server: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  //เพิ่มฟังก์ชันนี้: สำหรับการนำทาง
+  Future<void> _navigateToDetail(PendingRequest request) async {
+    if (_lenderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Error: Lender ID not found")),
+      );
+      return;
+    }
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MenuLenderPage(
+          request: request, 
+        ),
+      ),
+    );
+
+    //เมื่อหน้ารายละเอียด "pop" (ปิด) กลับมา
+    if (result == 'approve') {
+      await _callApiAction(request.requestId, 'approve', null);
+      await _loadUserDataAndFetchRequests(); 
+    } else if (result is Map && result['action'] == 'reject') {
+      await _callApiAction(request.requestId, 'reject', result['reason']);
+      await _loadUserDataAndFetchRequests(); 
+    }
+  }
+
+  
+
+  Future<void> _callApiAction(
+    int requestId,
+    String action,
+    String? reason,
+  ) async {
+    if (_lenderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Error: Lender ID not found. Please re-login."),
+        ),
+      );
+      return;
+    }
+
+    final url = '$baseUrl/lender/borrowingRequest/$requestId/$action';
+
+    final body = json.encode({
+      "lender_id": _lenderId.toString(),
+      if (reason != null) 'reason': reason,
+    });
+
+    try {
+      final response = await http.put(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Action '$action' successful."),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Failed: ${json.decode(response.body)['message'] ?? response.body}",
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
+  //Build UI
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text(
+          'Lender Dashboard',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.lightBlue[100],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: _logout,
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // Profile Header
-              Container(
-                width: double.infinity,
-                color: Colors.lightBlue[100],
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  children: [
-                    const CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.black12,
-                      child: Icon(Icons.person, size: 50, color: Colors.black),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      "John Doe (Lender)",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+        child: RefreshIndicator(
+          onRefresh: _loadUserDataAndFetchRequests,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                // Profile Header (เหมือนเดิม)
+                Container(
+                  width: double.infinity,
+                  color: Colors.lightBlue[100],
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    children: [
+                      const CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.black12,
+                        child: Icon(
+                          Icons.person,
+                          size: 50,
+                          color: Colors.black,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: const [
-                        _StatBox(
-                          color: Colors.purple,
-                          label: "Total",
-                          value: "10",
+                      const SizedBox(height: 8),
+                      Text(
+                        "${_lenderName ?? 'Lender'} (Lender)",
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        _StatBox(
-                          color: Colors.green,
-                          label: "Available",
-                          value: "5",
-                        ),
-                        _StatBox(
-                          color: Colors.orange,
-                          label: "Pending",
-                          value: "3",
-                        ),
-                        _StatBox(
-                          color: Colors.blue,
-                          label: "Borrowed",
-                          value: "2",
-                        ),
-                        _StatBox(
-                          color: Colors.red,
-                          label: "Disable",
-                          value: "5",
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurpleAccent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        icon: const Icon(Icons.history, color: Colors.white),
-                        label: const Text(
-                          "History",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const LenderHistory(),
-                            ),
-                          );
-                        },
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Product List
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.shade300,
-                      blurRadius: 5,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        children: const [
-                          Expanded(
-                            flex: 1,
-                            child: Text(
-                              "ID",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              "Product",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              "Image",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              "Status",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              "Actions",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(),
-
-                    // Product rows
-                    ..._products.map((product) {
-                      return Column(
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _ProductRow(
-                            id: product.id,
-                            name: product.name,
-                            imagePath: product.imagePath,
-                            loanStatus: product.loanStatus,
-                            onEdit: () {},
-                            onStatusChanged: _updateLoanStatus,
+                          _StatBox(
+                            color: Colors.purple,
+                            label: "Total",
+                            value: _totalAssets.toString(),
                           ),
-                          const Divider(),
+                          _StatBox(
+                            color: Colors.green,
+                            label: "Available",
+                            value: _availableAssets.toString(),
+                          ),
+                          _StatBox(
+                            color: Colors.orange,
+                            label: "Pending",
+                            value: _pendingAssets.toString(),
+                          ),
+                          _StatBox(
+                            color: Colors.blue,
+                            label: "Borrowed",
+                            value: _borrowedAssets.toString(),
+                          ),
+                          _StatBox(
+                            color: Colors.red,
+                            label: "Disable",
+                            value: _disabledAssets.toString(),
+                          ),
                         ],
-                      );
-                    }).toList(),
-                  ],
+                      ),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurpleAccent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          icon: const Icon(Icons.history, color: Colors.white),
+                          label: const Text(
+                            "History",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const LenderHistory(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 12),
+
+                // Product List
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.shade300,
+                        blurRadius: 5,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                     
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          children: const [
+                            Expanded(
+                              flex: 1,
+                              child: Text(
+                                "ID",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                "Product",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                "Image",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                "Status",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                "Actions",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(),
+
+                      //แก้ไขการสร้าง List
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: CircularProgressIndicator(),
+                        )
+                      else if (_errorMessage.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            _errorMessage,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        )
+                      else if (_pendingRequests.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Text("No pending requests."),
+                        )
+                      else
+                        ..._pendingRequests.map((request) {
+                          return Column(
+                            children: [
+                              _ProductRow(
+                              
+                                id: request.requestId.toString(),
+                                name: request.assetName,
+                                imagePath: request.assetImage,
+                                loanStatus: request.loanStatus,
+                                
+                                onPressed: () {
+                                  _navigateToDetail(request); 
+                                },
+                              ),
+                              const Divider(),
+                            ],
+                          );
+                        }).toList(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -323,7 +525,11 @@ class _LenderState extends State<Lender> {
   }
 }
 
-// ------------------------- กล่อง Dashboard -------------------------
+// ----------------------------------------------------
+//  (Widget ย่อย)
+// ----------------------------------------------------
+
+// _StatBox (เหมือนเดิม)
 class _StatBox extends StatelessWidget {
   final Color color;
   final String label;
@@ -338,11 +544,18 @@ class _StatBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 80,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+      width: 70,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
-        color: Colors.white, // พื้นหลังสีขาว
+        color: Colors.white,
         borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -357,7 +570,7 @@ class _StatBox extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -366,7 +579,7 @@ class _StatBox extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 20, // ขนาดใหญ่ขึ้น
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.black,
             ),
@@ -377,22 +590,20 @@ class _StatBox extends StatelessWidget {
   }
 }
 
-// ------------------------- Product Row -------------------------
+
 class _ProductRow extends StatelessWidget {
   final String id;
   final String name;
   final String imagePath;
   final String loanStatus;
-  final VoidCallback onEdit;
-  final Function(String id, String newStatus) onStatusChanged;
+  final VoidCallback onPressed;
 
   const _ProductRow({
     required this.id,
     required this.name,
     required this.imagePath,
     required this.loanStatus,
-    required this.onEdit,
-    required this.onStatusChanged,
+    required this.onPressed,
   });
 
   Color _getStatusColor(String status) {
@@ -408,55 +619,29 @@ class _ProductRow extends StatelessWidget {
     }
   }
 
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'Borrowed':
-        return Icons.check_circle;
-      case 'Pending':
-        return Icons.hourglass_top;
-      case 'Disapproved':
-        return Icons.cancel;
-      default:
-        return Icons.help;
-    }
-  }
-
-  Color _getStatusIconColor(String status) {
-    switch (status) {
-      case 'Borrowed':
-        return Colors.green;
-      case 'Pending':
-        return Colors.orange;
-      case 'Disapproved':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    String? dropdownValue;
-    if (loanStatus == "Borrowed") {
-      dropdownValue = "Approve";
-    } else if (loanStatus == "Disapproved") {
-      dropdownValue = "Disapprove";
-    } else {
-      dropdownValue = null;
-    }
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(flex: 1, child: Text(id, textAlign: TextAlign.center)),
+          // ID, Name, Image, Status
+          Expanded(
+            flex: 1,
+            child: Text(
+              id,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
           Expanded(
             flex: 2,
             child: Text(
               name,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(
@@ -468,8 +653,13 @@ class _ProductRow extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   image: DecorationImage(
-                    image: AssetImage(imagePath),
+                    image: NetworkImage(imagePath),
                     fit: BoxFit.cover,
+                    onError: (exception, stackTrace) => const Icon(
+                      Icons.broken_image,
+                      size: 24,
+                      color: Colors.grey,
+                    ),
                   ),
                 ),
               ),
@@ -483,67 +673,27 @@ class _ProductRow extends StatelessWidget {
               style: TextStyle(
                 color: _getStatusColor(loanStatus),
                 fontWeight: FontWeight.bold,
+                fontSize: 12,
               ),
             ),
           ),
+
+          //แทนที่ Dropdown ทั้งหมดด้วยปุ่มนี้
           Expanded(
             flex: 3,
-            child: Align(
-              alignment: Alignment.center,
-              child: Container(
-                width: 100,
-                height: 35,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _getStatusColor(loanStatus),
-                    width: 1,
+            child: Center(
+              child: ElevatedButton(
+                onPressed: onPressed, 
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent, 
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: dropdownValue,
-                    hint: Icon(
-                      _getStatusIcon(loanStatus),
-                      color: _getStatusIconColor(loanStatus),
-                      size: 18,
-                    ),
-                    isExpanded: true,
-                    icon: const Icon(Icons.arrow_drop_down, size: 16),
-                    items: <String>['Approve', 'Disapprove'].map((value) {
-                      Color itemColor = value == 'Approve'
-                          ? Colors.green
-                          : Colors.red;
-                      IconData itemIcon = value == 'Approve'
-                          ? Icons.check_circle
-                          : Icons.cancel;
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Row(
-                          children: [
-                            Icon(itemIcon, color: itemColor, size: 14),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                value,
-                                style: TextStyle(
-                                  color: itemColor,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) onStatusChanged(id, newValue);
-                    },
-                  ),
+                child: const Text(
+                  "Review", 
+                  style: TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ),
             ),
