@@ -41,6 +41,11 @@ class _Student_statusState extends State<Student_status> {
         context,
       ).showSnackBar(const SnackBar(content: Text("Please login again.")));
       setState(() => _isLoading = false);
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
       return;
     }
 
