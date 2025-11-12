@@ -22,6 +22,7 @@ class _RequestState extends State<Request> {
   bool isError = false;
   int _hoverIndex = -1;
   int _selectedIndex = 1;
+  int _notificationCount = 0; // สำหรับนับจำนวนแจ้งเตือน return
 
   // โหลดข้อมูล request จาก server
   Future<void> fetchRequests() async {
@@ -61,7 +62,6 @@ class _RequestState extends State<Request> {
 
   // ✅ ฟังก์ชันคืนของ (PUT)
   // request.dart (ในฟังก์ชัน Future<void> returnAsset(int requestId))
-  // ✅ ฟังก์ชันคืนของ (PUT)
   Future<void> returnAsset(int requestId) async {
     try {
       final res = await http.put(
@@ -74,18 +74,22 @@ class _RequestState extends State<Request> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text("✅ คืนอุปกรณ์สำเร็จ")));
-        fetchRequests(); // โหลดใหม่หลังคืนสำเร็จ
+
+        // ✅ ลบแถวที่คืนแล้วออกจาก requests ใน UI
+        setState(() {
+          requests.removeWhere((r) => r['id'] == requestId);
+        });
+
+        // ✅ โหลด count แจ้งเตือนใหม่
+        fetchNotificationCount();
       } else {
-        // --- ส่วนที่แก้ไข: จัดการข้อความผิดพลาดให้ชัดเจนขึ้น ---
         String errorMessage = 'เกิดข้อผิดพลาดในการคืนอุปกรณ์';
         try {
           final errorBody = json.decode(res.body);
-          // ดึง message จาก Server (เช่น "Request not found or already returned")
           errorMessage =
               errorBody['message'] ??
               'ข้อผิดพลาดไม่ทราบสาเหตุ (Status: ${res.statusCode})';
         } catch (e) {
-          // หาก Server ไม่ได้ส่ง JSON ที่ถูกต้องกลับมา
           errorMessage = res.body.isNotEmpty
               ? res.body
               : 'Server Error (Status: ${res.statusCode})';
@@ -94,7 +98,6 @@ class _RequestState extends State<Request> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("❌ คืนอุปกรณ์ไม่สำเร็จ: $errorMessage")),
         );
-        // ----------------------------------------------------
       }
     } catch (e) {
       debugPrint("Error PUT returnAsset: $e");
@@ -106,10 +109,24 @@ class _RequestState extends State<Request> {
     }
   }
 
+  // แจ้งเตือน
+  Future<void> fetchNotificationCount() async {
+    final res = await http.get(
+      Uri.parse("http://192.168.234.1:3000/api/returnCount"),
+    );
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      setState(() {
+        _notificationCount = data['count'] ?? 0;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    fetchRequests();
+    fetchRequests(); // โหลด request return
+    fetchNotificationCount(); // ✅ โหลดจำนวนแจ้งเตือนเมื่อเปิดหน้า
   }
 
   // ✅ ฟังก์ชันเปลี่ยนหน้า
@@ -177,8 +194,14 @@ class _RequestState extends State<Request> {
             ? const Center(child: CircularProgressIndicator())
             : isError
             ? _buildErrorView()
-            : SingleChildScrollView(
-                child: Column(children: [_buildHeader(), _buildTable()]),
+            : RefreshIndicator(
+                // <-- เพิ่ม RefreshIndicator
+                onRefresh: fetchRequests, // ฟังก์ชันรีโหลด
+                child: SingleChildScrollView(
+                  physics:
+                      const AlwaysScrollableScrollPhysics(), // ทำให้สามารถ scroll เพื่อ refresh ได้แม้ content น้อย
+                  child: Column(children: [_buildHeader(), _buildTable()]),
+                ),
               ),
       ),
     );
@@ -320,14 +343,72 @@ class _RequestState extends State<Request> {
                       ),
                       Expanded(
                         child: (r['returnStatus'] == 'Requested Return')
-                            ? ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.deepPurpleAccent,
-                                ),
-                                onPressed: () => returnAsset(r['id']),
-                                child: const Text(
-                                  "Return",
-                                  style: TextStyle(color: Colors.black),
+                            ? Center(
+                                child: SizedBox(
+                                  height: 34,
+                                  width: 90,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.deepPurpleAccent,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 6,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      textStyle: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    onPressed: () async {
+                                      // --- Show Confirmation Dialog ---
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text(
+                                            "Confirm Return",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          content: Text(
+                                            "Are you sure you want to return '${r['name']}'?",
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, false),
+                                              style: TextButton.styleFrom(
+                                                foregroundColor: Colors.red,
+                                              ),
+                                              child: const Text("Cancel"),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, true),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    Colors.deepPurpleAccent,
+                                                foregroundColor: Colors.white,
+                                              ),
+                                              child: const Text("Confirm"),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+
+                                      // --- ถ้ากดยืนยัน ให้คืนของและลบแถว ---
+                                      if (confirm == true) {
+                                        returnAsset(
+                                          r['id'],
+                                        ); // คืนของและลบแถวใน UI
+                                      }
+                                    },
+                                    child: const Text("Return"),
+                                  ),
                                 ),
                               )
                             : const Text(
@@ -381,20 +462,63 @@ class _RequestState extends State<Request> {
     bool largeIcon = false,
   }) {
     final bool isSelected = _selectedIndex == index;
+    final bool hasNotification =
+        index == 1 && _notificationCount > 0; // ปุ่ม Return เท่านั้น
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hoverIndex = index),
       onExit: (_) => setState(() => _hoverIndex = -1),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () => _onItemTapped(index),
+        onTap: () async {
+          _onItemTapped(index);
+          if (index == 1) {
+            await http.delete(
+              Uri.parse(
+                "http://192.168.234.1:3000/api/clearReturnNotifications",
+              ),
+            );
+            setState(() => _notificationCount = 0);
+          }
+        },
+
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: largeIcon ? 42 : 28,
-              color: isSelected ? Colors.purple : Colors.black,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  size: largeIcon ? 42 : 28,
+                  color: isSelected ? Colors.purple : Colors.black,
+                ),
+                if (hasNotification)
+                  Positioned(
+                    top: -2,
+                    right: -6,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                      child: Text(
+                        '$_notificationCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(

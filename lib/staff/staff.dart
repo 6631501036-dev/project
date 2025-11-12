@@ -41,12 +41,22 @@ class Staff extends StatefulWidget {
 class _StaffState extends State<Staff> {
   int _selectedIndex = 2;
   int _hoverIndex = -1;
+  int notificationCount = 0; // เพิ่มตัวแปรแจ้งเตือน
   List<Product> _products = [];
+
+  //ตัวแปร state เก็บสรุป
+  int totalAssets = 0;
+  int availableCount = 0;
+  int pendingCount = 0;
+  int borrowedCount = 0;
+  int disabledCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _fetchAssets();
+    _fetchAssets(); // โหลดข้อมูล assets
+    _fetchDashboardData(); //โหลดข้อมูล Dashboard
+    _fetchNotifications(); //เรียกใช้ แจ้งเตือน
   }
 
   // ✅ โหลดข้อมูลสินทรัพย์จากฐานข้อมูล
@@ -55,7 +65,6 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      // ❌ แก้ไข IP Address ให้ถูกต้อง หากมีการเปลี่ยนแปลง
       final url = Uri.parse("http://192.168.234.1:3000/assets");
       final response = await http.get(
         url,
@@ -72,13 +81,21 @@ class _StaffState extends State<Staff> {
                   id: item['asset_id'].toString(),
                   name: item['asset_name'],
                   imagePath:
-                      // ❌ แก้ไข IP Address ให้ถูกต้อง
                       "http://192.168.234.1:3000${item['image'] ?? '/public/image/default.jpg'}",
                   status: item['asset_status'],
                   statusColor: _getStatusColor(item['asset_status']),
                 ),
               )
               .toList();
+
+          // คำนวณสถิติจาก _products
+          totalAssets = _products.length;
+          availableCount = _products
+              .where((p) => p.status == "Available")
+              .length;
+          pendingCount = _products.where((p) => p.status == "Pending").length;
+          borrowedCount = _products.where((p) => p.status == "Borrowed").length;
+          disabledCount = _products.where((p) => p.status == "Disabled").length;
         });
         print("✅ Assets loaded: ${_products.length}");
       } else {
@@ -134,7 +151,7 @@ class _StaffState extends State<Staff> {
     }
   }
 
-  // 2. ✅ เพิ่มฟังก์ชันแก้ไขสินทรัพย์
+  // ✅ เพิ่มฟังก์ชันแก้ไขสินทรัพย์
   Future<void> _editAsset(String id, String name, [File? image]) async {
     try {
       final storage = FlutterSecureStorage();
@@ -363,6 +380,7 @@ class _StaffState extends State<Staff> {
         );
         break;
       case 1:
+        _clearReturnNotifications(); // ล้างแจ้งเตือนก่อนเปิดหน้า
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -424,6 +442,99 @@ class _StaffState extends State<Staff> {
     );
   }
 
+  // ✅ Dashboard Data API
+  Future<void> _fetchDashboardData() async {
+    try {
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
+      // ✅ แก้ URL ให้ถูก
+      final url = Uri.parse(
+        'http://192.168.234.1:3000/staff/dashboard/${widget.staffId}',
+      );
+      final response = await http.get(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        if (data["success"] == true && data["data"] != null) {
+          setState(() {
+            totalAssets = data["data"]["total_assets"] ?? 0;
+            availableCount = data["data"]["available_assets"] ?? 0;
+            borrowedCount = data["data"]["borrowed_assets"] ?? 0;
+            pendingCount = data["data"]["pending_requests"] ?? 0;
+            disabledCount = _products
+                .where((p) => p.status == "Disabled")
+                .length; // หรือเปลี่ยนชื่อ field ตามที่ backend ส่งมา
+          });
+        } else {
+          print("⚠️ Dashboard API returned success=false or no data");
+        }
+      } else {
+        print("❌ Dashboard API failed: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("❌ Error fetching dashboard data: $e");
+    }
+  }
+
+  // ✅ ฟังก์ชันโหลดจำนวนแจ้งเตือน
+  Future<void> _fetchNotifications() async {
+    try {
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
+      final url = Uri.parse("http://192.168.234.1:3000/api/returnCount");
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token', // ถ้า backend ต้องการ
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          notificationCount = data['count'] ?? 0;
+        });
+      } else {
+        print("❌ Failed to fetch notifications: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("❌ Error fetching notifications: $e");
+    }
+  }
+
+  // ✅ ล้างแจ้งเตือนแจ้งเตือน
+  Future<void> _clearReturnNotifications() async {
+    try {
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
+      final url = Uri.parse(
+        "http://192.168.234.1:3000/api/clearReturnNotifications",
+      );
+      final response = await http.delete(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          notificationCount = 0; // ล้าง badge ทันที
+        });
+        print("✅ Notifications cleared");
+      } else {
+        print("❌ Failed to clear notifications: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("❌ Error clearing notifications: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -443,12 +554,11 @@ class _StaffState extends State<Staff> {
     );
   }
 
-  // ❌ _buildHeader, _buildBottomNavBar, _buildNavItem ยังคงเดิม
   Widget _buildHeader() {
     return Container(
-      width: double.infinity, // เต็มแนวนอน
-      height: 200, // กำหนดความสูง หรือใช้ MediaQuery
+      width: double.infinity,
       color: Colors.lightBlue[100],
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -466,6 +576,76 @@ class _StaffState extends State<Staff> {
             "(Staff)",
             style: TextStyle(fontSize: 16, color: Colors.black54),
           ),
+
+          // ✅ เพิ่ม Dashboard ที่นี่
+          const SizedBox(height: 16),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildStatCard("Total", totalAssets, Colors.purple),
+                _buildStatCard("Available", availableCount, Colors.green),
+                _buildStatCard("Pending", pendingCount, Colors.orange),
+                _buildStatCard("Borrowed", borrowedCount, Colors.blue),
+                _buildStatCard("Disable", disabledCount, Colors.red),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🔹 ย้ายฟังก์ชัน statCard มาแยกออกไว้ใช้ใน Header
+  Widget _buildStatCard(String label, int count, Color color) {
+    return Container(
+      width: 80,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade400,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(6),
+                topRight: Radius.circular(6),
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            count.toString(),
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
@@ -565,30 +745,66 @@ class _StaffState extends State<Staff> {
     bool largeIcon = false,
   }) {
     final bool isSelected = _selectedIndex == index;
+
+    // ตรวจสอบถ้าเป็นไอคอน Notifications (สมมติว่า index 1)
+    bool showBadge = index == 1 && notificationCount > 0;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hoverIndex = index),
       onExit: (_) => setState(() => _hoverIndex = -1),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () => _onItemTapped(index),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            Icon(
-              icon,
-              size: largeIcon ? 42 : 28,
-              color: isSelected ? Colors.purple : Colors.black,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: largeIcon ? 42 : 28,
+                  color: isSelected ? Colors.purple : Colors.black,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isSelected ? Colors.purple : Colors.black,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                color: isSelected ? Colors.purple : Colors.black,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            if (showBadge)
+              Positioned(
+                right: -6,
+                top: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    notificationCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),

@@ -15,7 +15,7 @@ class Student_status extends StatefulWidget {
 }
 
 class _Student_statusState extends State<Student_status> {
-  final String baseUrl = "http://192.168.110.142:3000/api";
+  final String baseUrl = "http://192.168.234.1:3000/api";
   int? currentUserId;
 
   bool _isLoading = true;
