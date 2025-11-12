@@ -8,10 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
 import 'menu_lender.dart';
 
-//กำหนด IP ของคุณ
-const String baseIp = "192.168.110.142:3000";
+const String baseIp = "192.168.0.37:3000";
 const String baseUrl = "http://$baseIp";
-
 
 class PendingRequest {
   final int requestId;
@@ -50,6 +48,7 @@ class Lender extends StatefulWidget {
 
 class _LenderState extends State<Lender> {
   List<PendingRequest> _pendingRequests = [];
+  List<PendingRequest> _filteredRequests = [];
   bool _isLoading = true;
   String _errorMessage = '';
 
@@ -63,10 +62,37 @@ class _LenderState extends State<Lender> {
   int _borrowedAssets = 0;
   int _disabledAssets = 0;
 
+  // Search
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+
   @override
   void initState() {
     super.initState();
     _loadUserDataAndFetchRequests();
+
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase().trim();
+        _filterRequests();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterRequests() {
+    if (_searchQuery.isEmpty) {
+      _filteredRequests = _pendingRequests;
+    } else {
+      _filteredRequests = _pendingRequests
+          .where((req) => req.assetName.toLowerCase().contains(_searchQuery))
+          .toList();
+    }
   }
 
   //ฟังก์ชัน Logout (เหมือนเดิม)
@@ -139,7 +165,6 @@ class _LenderState extends State<Lender> {
         _errorMessage = "Invalid Token. Please login again. ($e)";
       });
     }
-    // (เราจะ set isLoading = false ใน _loadData)
   }
 
   // สร้างฟังก์ชันดึงสถิติ
@@ -157,18 +182,16 @@ class _LenderState extends State<Lender> {
               _availableAssets =
                   int.tryParse(stats['available'].toString()) ?? 0;
               _pendingAssets = int.tryParse(stats['pending'].toString()) ?? 0;
-              _borrowedAssets =
-                  int.tryParse(stats['borrowed'].toString()) ?? 0;
-              _disabledAssets =
-                  int.tryParse(stats['disabled'].toString()) ?? 0;
+              _borrowedAssets = int.tryParse(stats['borrowed'].toString()) ?? 0;
+              _disabledAssets = int.tryParse(stats['disabled'].toString()) ?? 0;
             });
           }
         }
       } else {
-        print("❌ HTTP Error: ${response.statusCode}");
+        print("HTTP Error: ${response.statusCode}");
       }
     } catch (e) {
-      print("⚠️ Error fetching stats: $e");
+      print("Error fetching stats: $e");
     }
   }
 
@@ -187,13 +210,15 @@ class _LenderState extends State<Lender> {
               _pendingRequests = requestsJson
                   .map((json) => PendingRequest.fromJson(json))
                   .toList();
+              _filteredRequests = _pendingRequests;
             });
           }
         }
       } else {
         if (mounted) {
           setState(() {
-            _errorMessage = 'Failed to load data (Code: ${response.statusCode})';
+            _errorMessage =
+                'Failed to load data (Code: ${response.statusCode})';
           });
         }
       }
@@ -223,24 +248,18 @@ class _LenderState extends State<Lender> {
 
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => MenuLenderPage(
-          request: request, 
-        ),
-      ),
+      MaterialPageRoute(builder: (context) => MenuLenderPage(request: request)),
     );
 
     //เมื่อหน้ารายละเอียด "pop" (ปิด) กลับมา
     if (result == 'approve') {
       await _callApiAction(request.requestId, 'approve', null);
-      await _loadUserDataAndFetchRequests(); 
+      await _loadUserDataAndFetchRequests();
     } else if (result is Map && result['action'] == 'reject') {
       await _callApiAction(request.requestId, 'reject', result['reason']);
-      await _loadUserDataAndFetchRequests(); 
+      await _loadUserDataAndFetchRequests();
     }
   }
-
-  
 
   Future<void> _callApiAction(
     int requestId,
@@ -319,7 +338,7 @@ class _LenderState extends State<Lender> {
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               children: [
-                // Profile Header (เหมือนเดิม)
+                // Profile Header
                 Container(
                   width: double.infinity,
                   color: Colors.lightBlue[100],
@@ -336,9 +355,10 @@ class _LenderState extends State<Lender> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        "${_lenderName ?? 'Lender'} (Lender)",
-                        style: const TextStyle(
+                      // เปลี่ยนจาก Nook → Sara
+                      const Text(
+                        "Sara (Lender)",
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
@@ -405,6 +425,39 @@ class _LenderState extends State<Lender> {
 
                 const SizedBox(height: 12),
 
+                // Search Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Material(
+                    elevation: 3,
+                    borderRadius: BorderRadius.circular(30),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: "search",
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.blue,
+                        ),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () => _searchController.clear(),
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
                 // Product List
                 Container(
                   padding: const EdgeInsets.all(8),
@@ -421,7 +474,6 @@ class _LenderState extends State<Lender> {
                   ),
                   child: Column(
                     children: [
-                     
                       Container(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
@@ -475,7 +527,7 @@ class _LenderState extends State<Lender> {
                       ),
                       const Divider(),
 
-                      //แก้ไขการสร้าง List
+                      // ใช้ _filteredRequests แทน
                       if (_isLoading)
                         const Padding(
                           padding: EdgeInsets.all(32.0),
@@ -489,24 +541,27 @@ class _LenderState extends State<Lender> {
                             style: const TextStyle(color: Colors.red),
                           ),
                         )
-                      else if (_pendingRequests.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Text("No pending requests."),
+                      else if (_filteredRequests.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            _searchQuery.isEmpty
+                                ? "No pending requests."
+                                : "No assets found matching \"$_searchQuery\"",
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
                         )
                       else
-                        ..._pendingRequests.map((request) {
+                        ..._filteredRequests.map((request) {
                           return Column(
                             children: [
                               _ProductRow(
-                              
                                 id: request.requestId.toString(),
                                 name: request.assetName,
                                 imagePath: request.assetImage,
                                 loanStatus: request.loanStatus,
-                                
                                 onPressed: () {
-                                  _navigateToDetail(request); 
+                                  _navigateToDetail(request);
                                 },
                               ),
                               const Divider(),
@@ -525,11 +580,6 @@ class _LenderState extends State<Lender> {
   }
 }
 
-// ----------------------------------------------------
-//  (Widget ย่อย)
-// ----------------------------------------------------
-
-// _StatBox (เหมือนเดิม)
 class _StatBox extends StatelessWidget {
   final Color color;
   final String label;
@@ -590,7 +640,6 @@ class _StatBox extends StatelessWidget {
   }
 }
 
-
 class _ProductRow extends StatelessWidget {
   final String id;
   final String name;
@@ -626,7 +675,6 @@ class _ProductRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // ID, Name, Image, Status
           Expanded(
             flex: 1,
             child: Text(
@@ -677,22 +725,20 @@ class _ProductRow extends StatelessWidget {
               ),
             ),
           ),
-
-          //แทนที่ Dropdown ทั้งหมดด้วยปุ่มนี้
           Expanded(
             flex: 3,
             child: Center(
               child: ElevatedButton(
-                onPressed: onPressed, 
+                onPressed: onPressed,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent, 
+                  backgroundColor: Colors.blueAccent,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
                 child: const Text(
-                  "Review", 
+                  "Review",
                   style: TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ),

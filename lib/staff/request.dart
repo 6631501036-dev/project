@@ -27,7 +27,7 @@ class _RequestState extends State<Request> {
   Future<void> fetchRequests() async {
     try {
       final res = await http.get(
-        Uri.parse("http://192.168.234.1:3000/staff/request/${widget.staffId}"),
+        Uri.parse("http://192.168.0.37:3000/staff/request/${widget.staffId}"),
       );
 
       if (res.statusCode == 200) {
@@ -65,7 +65,7 @@ class _RequestState extends State<Request> {
   Future<void> returnAsset(int requestId) async {
     try {
       final res = await http.put(
-        Uri.parse("http://192.168.234.1:3000/staff/returnAsset/$requestId"),
+        Uri.parse("http://192.168.0.37:3000/staff/returnAsset/$requestId"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"staff_id": widget.staffId}),
       );

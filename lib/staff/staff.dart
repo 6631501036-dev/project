@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// ✅ Class สำหรับข้อมูลสินทรัพย์
+// Class สำหรับข้อมูลสินทรัพย์
 class Product {
   final String id;
   final String name;
@@ -42,21 +42,48 @@ class _StaffState extends State<Staff> {
   int _selectedIndex = 2;
   int _hoverIndex = -1;
   List<Product> _products = [];
+  List<Product> _filteredProducts = [];
+
+  // Search
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
     _fetchAssets();
+
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase().trim();
+        _filterProducts();
+      });
+    });
   }
 
-  // ✅ โหลดข้อมูลสินทรัพย์จากฐานข้อมูล
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterProducts() {
+    if (_searchQuery.isEmpty) {
+      _filteredProducts = _products;
+    } else {
+      _filteredProducts = _products
+          .where((p) => p.name.toLowerCase().contains(_searchQuery))
+          .toList();
+    }
+  }
+
+  // โหลดข้อมูลสินทรัพย์จากฐานข้อมูล
   Future<void> _fetchAssets() async {
     try {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      // ❌ แก้ไข IP Address ให้ถูกต้อง หากมีการเปลี่ยนแปลง
-      final url = Uri.parse("http://192.168.110.142:3000/assets");
+      final url = Uri.parse("http://192.168.0.37:3000/assets");
       final response = await http.get(
         url,
         headers: {'Authorization': 'Bearer $token'},
@@ -72,24 +99,24 @@ class _StaffState extends State<Staff> {
                   id: item['asset_id'].toString(),
                   name: item['asset_name'],
                   imagePath:
-                      // ❌ แก้ไข IP Address ให้ถูกต้อง
-                      "http://192.168.110.142:3000${item['image'] ?? '/public/image/default.jpg'}",
+                      "http://192.168.0.37:3000${item['image'] ?? '/public/image/default.jpg'}",
                   status: item['asset_status'],
                   statusColor: _getStatusColor(item['asset_status']),
                 ),
               )
               .toList();
+          _filteredProducts = _products;
         });
-        print("✅ Assets loaded: ${_products.length}");
+        print("Assets loaded: ${_products.length}");
       } else {
-        print("❌ Failed to load assets: ${response.statusCode}");
+        print("Failed to load assets: ${response.statusCode}");
       }
     } catch (e) {
       print("Error fetching assets: $e");
     }
   }
 
-  // ✅ กำหนดสีตามสถานะ
+  // กำหนดสีตามสถานะ
   Color _getStatusColor(String status) {
     switch (status) {
       case "Available":
@@ -105,11 +132,10 @@ class _StaffState extends State<Staff> {
     }
   }
 
-  // ✅ เพิ่มสินทรัพย์ใหม่
+  // เพิ่มสินทรัพย์ใหม่
   Future<void> addAsset(String name, String description, [File? image]) async {
     try {
-      // ❌ แก้ไข IP Address ให้ถูกต้อง
-      final uri = Uri.parse('http://192.168.110.142:3000/staff/addAsset');
+      final uri = Uri.parse('http://192.168.0.37:3000/staff/addAsset');
       var request = http.MultipartRequest('POST', uri);
       request.fields['name'] = name;
       request.fields['description'] = description;
@@ -125,7 +151,7 @@ class _StaffState extends State<Staff> {
 
       if (response.statusCode == 200 && data['success'] == true) {
         _showPopup("Success", data['message'], true);
-        _fetchAssets(); // reload assets
+        _fetchAssets();
       } else {
         _showPopup("Error", data['message'] ?? 'Something went wrong', false);
       }
@@ -134,19 +160,16 @@ class _StaffState extends State<Staff> {
     }
   }
 
-  // 2. ✅ เพิ่มฟังก์ชันแก้ไขสินทรัพย์
+  // แก้ไขสินทรัพย์
   Future<void> _editAsset(String id, String name, [File? image]) async {
     try {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
-      // ❌ แก้ไข IP Address ให้ถูกต้อง
-      final uri = Uri.parse('http://192.168.110.142:3000/staff/editAsset/$id');
+      final uri = Uri.parse('http://192.168.0.37:3000/staff/editAsset/$id');
       var request = http.MultipartRequest('PUT', uri);
-      request.headers['Authorization'] = 'Bearer $token'; // เพิ่ม token
+      request.headers['Authorization'] = 'Bearer $token';
       request.fields['name'] = name;
-      // Note: 'description' is assumed to be required by the backend, even if not editable here.
-      request.fields['description'] =
-          "Sport Equipment"; // ใช้ค่า default หรือดึงจาก product เดิมถ้ามี
+      request.fields['description'] = "Sport Equipment";
 
       if (image != null) {
         request.files.add(
@@ -159,12 +182,7 @@ class _StaffState extends State<Staff> {
       final data = json.decode(respStr);
 
       if (response.statusCode == 200 && data['success'] == true) {
-        _showPopup(
-          "Success",
-          data['message'],
-          true,
-          onApply: _fetchAssets,
-        ); // reload assets
+        _showPopup("Success", data['message'], true, onApply: _fetchAssets);
       } else {
         _showPopup("Error", data['message'] ?? 'Failed to update asset', false);
       }
@@ -173,7 +191,7 @@ class _StaffState extends State<Staff> {
     }
   }
 
-  // ✅ แสดง Popup แจ้งเตือน
+  // แสดง Popup
   void _showPopup(
     String title,
     String message,
@@ -225,27 +243,19 @@ class _StaffState extends State<Staff> {
                 style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
               ),
               const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // ใช้ปุ่มเดียวเพื่อปิด
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey.shade300,
-                      foregroundColor: Colors.black87,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 25,
-                        vertical: 12,
-                      ),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("Close"), // เปลี่ยนเป็น Close
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey.shade300,
+                  foregroundColor: Colors.black87,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  // Removed 'Apply' button for standard success/error popups
-                ],
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  onApply?.call();
+                },
+                child: const Text("Close"),
               ),
             ],
           ),
@@ -254,19 +264,14 @@ class _StaffState extends State<Staff> {
     );
   }
 
-  // 🔹 ฟังก์ชันสลับสถานะ (Enable/Disable) เชื่อมกับ API server
+  // สลับสถานะ Enable/Disable
   Future<void> _toggleAssetStatus(String assetId, String currentStatus) async {
     try {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
-
-      // กำหนด endpoint ตาม currentStatus
-      final endpoint = currentStatus == "Disabled"
-          ? "enable" // Disabled -> Enable
-          : "disable"; // Available -> Disable
-
+      final endpoint = currentStatus == "Disabled" ? "enable" : "disable";
       final url = Uri.parse(
-        "http://192.168.110.142:3000/staff/editAsset/$assetId/$endpoint",
+        "http://192.168.0.37:3000/staff/editAsset/$assetId/$endpoint",
       );
 
       final response = await http.put(
@@ -277,7 +282,7 @@ class _StaffState extends State<Staff> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
-          _fetchAssets(); // โหลดข้อมูลใหม่
+          _fetchAssets();
           _showPopup("Success", data['message'] ?? "Status updated", true);
         } else {
           _showPopup(
@@ -286,22 +291,14 @@ class _StaffState extends State<Staff> {
             false,
           );
         }
-      } else {
-        final data = json.decode(response.body);
-        _showPopup(
-          "Error",
-          data['message'] ?? "Failed to change status",
-          false,
-        );
       }
     } catch (e) {
       _showPopup("Error", "Error toggling status: $e", false);
     }
   }
 
-  // ✅ ลบสินทรัพย์
+  // ลบสินทรัพย์
   Future<void> _deleteAsset(String id) async {
-    // เพิ่มการยืนยันก่อนลบ
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -324,10 +321,7 @@ class _StaffState extends State<Staff> {
       try {
         final storage = FlutterSecureStorage();
         final token = await storage.read(key: 'token');
-        // ❌ แก้ไข IP Address ให้ถูกต้อง
-        final url = Uri.parse(
-          "http://192.168.110.142:3000/staff/deleteAsset/$id",
-        );
+        final url = Uri.parse("http://192.168.0.37:3000/staff/deleteAsset/$id");
         final response = await http.delete(
           url,
           headers: {'Authorization': 'Bearer $token'},
@@ -335,13 +329,6 @@ class _StaffState extends State<Staff> {
         if (response.statusCode == 200) {
           _fetchAssets();
           _showPopup("Success", "Asset deleted successfully", true);
-        } else {
-          final data = json.decode(response.body);
-          _showPopup(
-            "Error",
-            data['message'] ?? 'Failed to delete asset',
-            false,
-          );
         }
       } catch (e) {
         _showPopup("Error", "Error deleting asset: $e", false);
@@ -349,7 +336,7 @@ class _StaffState extends State<Staff> {
     }
   }
 
-  // ✅ การจัดการการแตะ Bottom Navigation Bar
+  // Bottom Navigation
   void _onItemTapped(int i) {
     setState(() => _selectedIndex = i);
     switch (i) {
@@ -372,7 +359,6 @@ class _StaffState extends State<Staff> {
         );
         break;
       case 2:
-        // Case 2: Add Asset (เปิด Dialog)
         showDialog(
           context: context,
           builder: (_) => AlertDialog(
@@ -381,7 +367,7 @@ class _StaffState extends State<Staff> {
               initialProductName: "",
               id: "",
               onAddAsset: (name, _, image) =>
-                  addAsset(name, "Sport Equipment", image), // ใช้ addAsset เดิม
+                  addAsset(name, "Sport Equipment", image),
             ),
           ),
         );
@@ -407,7 +393,6 @@ class _StaffState extends State<Staff> {
     }
   }
 
-  // ✅ เปิด Dialog สำหรับแก้ไข
   void _showEditDialog(Product product) {
     showDialog(
       context: context,
@@ -416,9 +401,8 @@ class _StaffState extends State<Staff> {
           title: "Edit Asset",
           initialProductName: product.name,
           id: product.id,
-          isEdit: true, // ตั้งเป็นโหมดแก้ไข
-          onAddAsset: (name, _, image) =>
-              _editAsset(product.id, name, image), // ใช้ _editAsset
+          isEdit: true,
+          onAddAsset: (name, _, image) => _editAsset(product.id, name, image),
         ),
       ),
     );
@@ -430,24 +414,63 @@ class _StaffState extends State<Staff> {
       backgroundColor: Colors.grey[100],
       bottomNavigationBar: _buildBottomNavBar(),
       body: SafeArea(
-        // 2. ✅ เพิ่ม RefreshIndicator
         child: RefreshIndicator(
-          onRefresh:
-              _fetchAssets, // เรียกฟังก์ชันโหลดข้อมูลเมื่อ Pull-to-refresh
+          onRefresh: _fetchAssets,
           child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(), // ทำให้ดึงลงได้เสมอ
-            child: Column(children: [_buildHeader(), _buildTable()]),
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                _buildHeader(),
+
+                // Search Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
+                  child: Material(
+                    elevation: 3,
+                    borderRadius: BorderRadius.circular(30),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: "search",
+                        prefixIcon: const Icon(
+                          Icons.search,
+                          color: Colors.blue,
+                        ),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () => _searchController.clear(),
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                _buildTable(),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ❌ _buildHeader, _buildBottomNavBar, _buildNavItem ยังคงเดิม
   Widget _buildHeader() {
     return Container(
-      width: double.infinity, // เต็มแนวนอน
-      height: 200, // กำหนดความสูง หรือใช้ MediaQuery
+      width: double.infinity,
+      height: 200,
       color: Colors.lightBlue[100],
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -505,28 +528,35 @@ class _StaffState extends State<Staff> {
             ),
           ),
           const Divider(),
-          ..._products.map((p) {
-            return Column(
-              children: [
-                _ProductRow(
-                  id: p.id,
-                  name: p.name,
-                  imagePath: p.imagePath,
-                  status: p.status,
-                  statusColor: p.statusColor,
-                  isReturned: p.isReturned,
-                  onEdit: () =>
-                      _showEditDialog(p), // ✅ ผูกกับฟังก์ชันเปิด Dialog แก้ไข
-                  onToggleDisable: (id) => _toggleAssetStatus(
-                    id,
-                    p.status,
-                  ), // 1. ✅ ผูกกับฟังก์ชันสลับสถานะและส่ง status ปัจจุบัน
-                  onDelete: _deleteAsset,
-                ),
-                const Divider(),
-              ],
-            );
-          }).toList(),
+          if (_filteredProducts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                _searchQuery.isEmpty
+                    ? "No assets"
+                    : "No matching assets found for \"$_searchQuery\"",
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+            )
+          else
+            ..._filteredProducts.map((p) {
+              return Column(
+                children: [
+                  _ProductRow(
+                    id: p.id,
+                    name: p.name,
+                    imagePath: p.imagePath,
+                    status: p.status,
+                    statusColor: p.statusColor,
+                    isReturned: p.isReturned,
+                    onEdit: () => _showEditDialog(p),
+                    onToggleDisable: (id) => _toggleAssetStatus(id, p.status),
+                    onDelete: _deleteAsset,
+                  ),
+                  const Divider(),
+                ],
+              );
+            }).toList(),
         ],
       ),
     );
@@ -596,7 +626,7 @@ class _StaffState extends State<Staff> {
   }
 }
 
-// ✅ Widget แถวข้อมูลสินทรัพย์
+// Widget แถวข้อมูล
 class _ProductRow extends StatelessWidget {
   final String id, name, imagePath, status;
   final Color statusColor;
@@ -619,7 +649,6 @@ class _ProductRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. ✅ กำหนดข้อความและสีปุ่ม Disable/Enable
     final bool isDisabled = status == "Disabled";
     final String toggleButtonText = isDisabled ? "Enable" : "Disable";
     final Color toggleButtonColor = isDisabled
@@ -649,24 +678,19 @@ class _ProductRow extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Edit ปุ่มสีน้ำเงิน
               ElevatedButton(
                 onPressed: onEdit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue.shade700,
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(80, 35), // กำหนดความกว้างและสูง
+                  minimumSize: const Size(80, 35),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text(
-                  "Edit",
-                  style: TextStyle(fontSize: 12),
-                ), // ขนาดปุ่ม
+                child: const Text("Edit", style: TextStyle(fontSize: 12)),
               ),
               const SizedBox(height: 6),
-              // Enable/Disable ปุ่มสีเขียว/แดง
               ElevatedButton(
                 onPressed: () => onToggleDisable(id),
                 style: ElevatedButton.styleFrom(
@@ -683,7 +707,6 @@ class _ProductRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              // Delete ปุ่มสีเทา
               ElevatedButton(
                 onPressed: () => onDelete(id),
                 style: ElevatedButton.styleFrom(
@@ -704,11 +727,10 @@ class _ProductRow extends StatelessWidget {
   }
 }
 
-// ✅ Widget Dialog สำหรับเพิ่ม/แก้ไขสินทรัพย์
+// Dialog เพิ่ม/แก้ไข
 class _ProductFormDialog extends StatefulWidget {
   final String title, initialProductName, id;
   final bool isEdit;
-  // 2. ✅ แก้ไข onAddAsset/onEditAsset ให้รองรับการทำงานแบบเดียวกัน
   final Future<void> Function(String, String, File?) onAddAsset;
 
   const _ProductFormDialog({
@@ -726,7 +748,7 @@ class _ProductFormDialog extends StatefulWidget {
 class _ProductFormDialogState extends State<_ProductFormDialog> {
   final TextEditingController controller = TextEditingController();
   File? image;
-  bool _isLoading = false; // สำหรับป้องกันกดซ้ำ
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -734,16 +756,12 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
     controller.text = widget.initialProductName;
   }
 
-  // เลือกรูปภาพ
   Future<void> pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => image = File(picked.path));
-    }
+    if (picked != null) setState(() => image = File(picked.path));
   }
 
-  // แสดง Popup
   void _showPopup(String title, String message, bool success) {
     showDialog(
       context: context,
@@ -760,11 +778,9 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
     );
   }
 
-  // เรียก onAddAsset พร้อม handle success/fail
   Future<void> _handleSubmit() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
-
     try {
       await widget.onAddAsset(controller.text, "Sport Equipment", image);
       _showPopup(
@@ -774,7 +790,7 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
             : "Asset added successfully",
         true,
       );
-      Navigator.pop(context); // ปิด dialog หลัง success
+      Navigator.pop(context);
     } catch (e) {
       _showPopup("Error", e.toString(), false);
     } finally {
@@ -816,7 +832,6 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Cancel
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
@@ -832,7 +847,6 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
                   ),
                   child: const Text("Cancel"),
                 ),
-                // Save/Add
                 ElevatedButton(
                   onPressed: _handleSubmit,
                   style: ElevatedButton.styleFrom(
