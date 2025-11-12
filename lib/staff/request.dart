@@ -28,7 +28,7 @@ class _RequestState extends State<Request> {
   Future<void> fetchRequests() async {
     try {
       final res = await http.get(
-        Uri.parse("http://192.168.234.1:3000/staff/request/${widget.staffId}"),
+        Uri.parse("http://192.168.110.142:3000/staff/request/${widget.staffId}"),
       );
 
       if (res.statusCode == 200) {
@@ -65,7 +65,7 @@ class _RequestState extends State<Request> {
   Future<void> returnAsset(int requestId) async {
     try {
       final res = await http.put(
-        Uri.parse("http://192.168.234.1:3000/staff/returnAsset/$requestId"),
+        Uri.parse("http://192.168.110.142:3000/staff/returnAsset/$requestId"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"staff_id": widget.staffId}),
       );
@@ -112,7 +112,7 @@ class _RequestState extends State<Request> {
   // แจ้งเตือน
   Future<void> fetchNotificationCount() async {
     final res = await http.get(
-      Uri.parse("http://192.168.234.1:3000/api/returnCount"),
+      Uri.parse("http://192.168.110.142:3000/api/returnCount"),
     );
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
@@ -475,7 +475,7 @@ class _RequestState extends State<Request> {
           if (index == 1) {
             await http.delete(
               Uri.parse(
-                "http://192.168.234.1:3000/api/clearReturnNotifications",
+                "http://192.168.110.142:3000/api/clearReturnNotifications",
               ),
             );
             setState(() => _notificationCount = 0);

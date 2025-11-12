@@ -16,7 +16,7 @@ class Student extends StatefulWidget {
 }
 
 class _StudentState extends State<Student> with RouteAware {
-  final String baseApi = "http://192.168.234.1:3000/api";
+  final String baseApi = "http://192.168.110.142:3000/api";
   int? borrowerId; // user_id
   List<Map<String, dynamic>> equipmentList = [];
   Map<String, dynamic>? _activeStatusItem;
@@ -327,7 +327,7 @@ class _StudentState extends State<Student> with RouteAware {
   }
 
   // อย่าลืมเปลี่ยน IP ด้วยเดี๋ยวรูปไม่ขึ้น
-  final String imageBaseUrl = "http://192.168.234.1:3000";
+  final String imageBaseUrl = "http://192.168.110.142:3000";
   // อย่าลืมเปลี่ยน IP ด้วยเดี๋ยวรูปไม่ขึ้น
   // 🟢 แก้ไขฟังก์ชันนี้
   String buildImageUrl(String? imageField) {

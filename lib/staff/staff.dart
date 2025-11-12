@@ -452,7 +452,7 @@ class _StaffState extends State<Staff> {
 
       // ✅ แก้ URL ให้ถูก
       final url = Uri.parse(
-        'http://192.168.234.1:3000/staff/dashboard/${widget.staffId}',
+        'http://192.168.110.142:3000/staff/dashboard/${widget.staffId}',
       );
       final response = await http.get(
         url,
@@ -489,7 +489,7 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      final url = Uri.parse("http://192.168.234.1:3000/api/returnCount");
+      final url = Uri.parse("http://192.168.110.142:3000/api/returnCount");
       final response = await http.get(
         url,
         headers: {
@@ -517,7 +517,7 @@ class _StaffState extends State<Staff> {
       final token = await storage.read(key: 'token');
 
       final url = Uri.parse(
-        "http://192.168.234.1:3000/api/clearReturnNotifications",
+        "http://192.168.110.142:3000/api/clearReturnNotifications",
       );
       final response = await http.delete(
         url,
