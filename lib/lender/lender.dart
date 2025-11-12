@@ -9,8 +9,9 @@ import 'package:flutter_application_1/login/login.dart';
 import 'menu_lender.dart';
 
 //กำหนด IP ของคุณ
-const String baseIp = "192.168.234.1:3000";
+const String baseIp = "192.168.110.142:3000";
 const String baseUrl = "http://$baseIp";
+
 
 class PendingRequest {
   final int requestId;
@@ -190,8 +191,7 @@ class _LenderState extends State<Lender> {
       } else {
         if (mounted) {
           setState(() {
-            _errorMessage =
-                'Failed to load data (Code: ${response.statusCode})';
+            _errorMessage = 'Failed to load data (Code: ${response.statusCode})';
           });
         }
       }
@@ -222,8 +222,8 @@ class _LenderState extends State<Lender> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MenuLender(
-          //request: request,
+        builder: (context) => MenuLenderPage(
+          request: request, 
         ),
       ),
     );
