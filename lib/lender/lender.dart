@@ -157,10 +157,8 @@ class _LenderState extends State<Lender> {
               _availableAssets =
                   int.tryParse(stats['available'].toString()) ?? 0;
               _pendingAssets = int.tryParse(stats['pending'].toString()) ?? 0;
-              _borrowedAssets =
-                  int.tryParse(stats['borrowed'].toString()) ?? 0;
-              _disabledAssets =
-                  int.tryParse(stats['disabled'].toString()) ?? 0;
+              _borrowedAssets = int.tryParse(stats['borrowed'].toString()) ?? 0;
+              _disabledAssets = int.tryParse(stats['disabled'].toString()) ?? 0;
             });
           }
         }
@@ -233,14 +231,12 @@ class _LenderState extends State<Lender> {
     //เมื่อหน้ารายละเอียด "pop" (ปิด) กลับมา
     if (result == 'approve') {
       await _callApiAction(request.requestId, 'approve', null);
-      await _loadUserDataAndFetchRequests(); 
+      await _loadUserDataAndFetchRequests();
     } else if (result is Map && result['action'] == 'reject') {
       await _callApiAction(request.requestId, 'reject', result['reason']);
-      await _loadUserDataAndFetchRequests(); 
+      await _loadUserDataAndFetchRequests();
     }
   }
-
-  
 
   Future<void> _callApiAction(
     int requestId,
@@ -421,7 +417,6 @@ class _LenderState extends State<Lender> {
                   ),
                   child: Column(
                     children: [
-                     
                       Container(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
@@ -499,14 +494,13 @@ class _LenderState extends State<Lender> {
                           return Column(
                             children: [
                               _ProductRow(
-                              
                                 id: request.requestId.toString(),
                                 name: request.assetName,
                                 imagePath: request.assetImage,
                                 loanStatus: request.loanStatus,
-                                
+
                                 onPressed: () {
-                                  _navigateToDetail(request); 
+                                  _navigateToDetail(request);
                                 },
                               ),
                               const Divider(),
@@ -589,7 +583,6 @@ class _StatBox extends StatelessWidget {
     );
   }
 }
-
 
 class _ProductRow extends StatelessWidget {
   final String id;
@@ -683,16 +676,16 @@ class _ProductRow extends StatelessWidget {
             flex: 3,
             child: Center(
               child: ElevatedButton(
-                onPressed: onPressed, 
+                onPressed: onPressed,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent, 
+                  backgroundColor: Colors.blueAccent,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
                 child: const Text(
-                  "Review", 
+                  "Review",
                   style: TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ),
