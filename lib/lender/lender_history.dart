@@ -1,275 +1,348 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_application_1/login/login.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// -----------------------------------------------------------------------------
-// 1. Data Model
-// -----------------------------------------------------------------------------
-class HistoryRecord {
-  final String id, item, borrowDate, returnDate, student, lender, staff, status;
-
-  const HistoryRecord({
-    required this.id,
-    required this.item,
-    required this.borrowDate,
-    required this.returnDate,
-    required this.student,
-    required this.lender,
-    required this.staff,
-    required this.status,
-  });
-}
-
-// -----------------------------------------------------------------------------
-// 2. Lender History Screen (Main Page)
-// -----------------------------------------------------------------------------
-class LenderHistory extends StatefulWidget {
-  const LenderHistory({super.key});
+class Lenderhistory extends StatefulWidget {
+  const Lenderhistory({super.key});
 
   @override
-  State<LenderHistory> createState() => _LenderHistoryState();
+  State<Lenderhistory> createState() => _LenderhistoryState();
 }
 
-class _LenderHistoryState extends State<LenderHistory> {
-  // ตัวอย่างข้อมูล (จำลอง)
-  final List<HistoryRecord> _records = const [
-    HistoryRecord(
-      id: "1",
-      item: "Football",
-      borrowDate: "10/11/2025",
-      returnDate: "12/11/2025",
-      student: "student_1",
-      lender: "lender_1",
-      staff: "staff_1",
-      status: "Approved",
-    ),
-    HistoryRecord(
-      id: "2",
-      item: "Basketball",
-      borrowDate: "10/11/2025",
-      returnDate: "12/11/2025",
-      student: "student_2",
-      lender: "lender_1",
-      staff: "-",
-      status: "Disapproved",
-    ),
-  ];
+class _LenderhistoryState extends State<Lenderhistory> {
+  final String baseUrl = "http://192.168.1.6:3000/api";
+  int? userId;
+
+  bool _isLoading = true;
+  List<HistoryItem> _historyItems = [];
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header Section
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.only(top: 40, bottom: 30),
-              color: Colors.lightBlue[100],
-              child: Column(
-                children: [
-                  // Back Button
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back_ios, size: 30),
-                      color: Colors.black,
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ),
-                  // Profile Avatar
-                  const CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Colors.black12,
-                    child: Icon(Icons.person, size: 50, color: Colors.black),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "John Doe (Lender)",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-
-            // History Table
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: _HistoryTable(records: _records),
-            ),
-          ],
-        ),
-      ),
-    );
+  void initState() {
+    super.initState();
+    _loadUserAndFetch();
   }
-}
 
-// -----------------------------------------------------------------------------
-// 3. History Table Widget
-// -----------------------------------------------------------------------------
-class _HistoryTable extends StatelessWidget {
-  final List<HistoryRecord> records;
+  Future<void> _loadUserAndFetch() async {
+    // ========== ดึง user_id จาก token ==========
+    final storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
 
-  const _HistoryTable({required this.records});
+    final jwt = JWT.decode(token!);
+    Map payload = jwt.payload;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+    userId = payload['user_id'] as int;
+
+    if (userId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please login again.")));
+      setState(() => _isLoading = false);
+      return;
+    }
+    await _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    if (userId == null) return;
+    setState(() {
+      _isLoading = true;
+      _historyItems = [];
+    });
+
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/lender/history/$userId'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200 && mounted) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          _historyItems = data
+              .map((jsonItem) => HistoryItem.fromJson(jsonItem))
+              .toList();
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to load history: ${response.statusCode}'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("Error fetching history: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Network error while loading history")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Confirm Logout'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Logout'),
           ),
         ],
       ),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(10),
-                topRight: Radius.circular(10),
-              ),
-            ),
-            child: const _HistoryRow(
-              isHeader: true,
-              id: "ID",
-              item: "Item",
-              borrowDate: "Borrow date",
-              returnDate: "Return date",
-              student: "Student",
-              lender: "Lender",
-              staff: "Staff",
-              status: "Status",
-            ),
-          ),
-
-          // Rows
-          ...records.map((r) {
-            return Column(
-              children: [
-                const Divider(height: 1, thickness: 1, color: Colors.black12),
-                _HistoryRow(
-                  id: r.id,
-                  item: r.item,
-                  borrowDate: r.borrowDate,
-                  returnDate: r.returnDate,
-                  student: r.student,
-                  lender: r.lender,
-                  staff: r.staff,
-                  status: r.status,
-                ),
-              ],
-            );
-          }).toList(),
-        ],
-      ),
     );
-  }
-}
 
-// -----------------------------------------------------------------------------
-// 4. Single Row Widget
-// -----------------------------------------------------------------------------
-class _HistoryRow extends StatelessWidget {
-  final String id, item, borrowDate, returnDate, student, lender, staff, status;
-  final bool isHeader;
-
-  const _HistoryRow({
-    required this.id,
-    required this.item,
-    required this.borrowDate,
-    required this.returnDate,
-    required this.student,
-    required this.lender,
-    required this.staff,
-    required this.status,
-    this.isHeader = false,
-  });
-
-  // ✅ กำหนดสีข้อความตามสถานะ
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'approved':
-        return Colors.green;
-      case 'disapproved':
-        return Colors.red;
-      // case 'pending':
-      //   return Colors.orange;
-      default:
-        return Colors.black;
+    if (confirm == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle baseStyle = TextStyle(
-      fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-      fontSize: isHeader ? 11 : 8, // ปรับขนาด  font
-      color: Colors.black,
-    );
+    final screenHeight = MediaQuery.of(context).size.height;
+    final appBarHeight = AppBar().preferredSize.height;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = 16.0;
+    final minCardHeight =
+        screenHeight - appBarHeight - topPadding - bottomPadding;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 1,
-            child: Text(id, style: baseStyle, textAlign: TextAlign.center),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(item, style: baseStyle, textAlign: TextAlign.center),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              borrowDate,
-              style: baseStyle,
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              returnDate,
-              style: baseStyle,
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(student, style: baseStyle, textAlign: TextAlign.center),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(lender, style: baseStyle, textAlign: TextAlign.center),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(staff, style: baseStyle, textAlign: TextAlign.center),
-          ),
-
-          // ✅ Status Column with color
-          Expanded(
-            flex: 2,
-            child: Text(
-              status,
-              style: baseStyle.copyWith(
-                color: _getStatusColor(status),
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
+    return Scaffold(
+      backgroundColor: Colors.blue.shade100,
+      appBar: AppBar(
+        backgroundColor: Colors.blue.shade100,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          onPressed: () {
+            if (Navigator.canPop(context)) Navigator.pop(context);
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Colors.black),
+            onPressed: _logout,
           ),
         ],
       ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _fetchData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: minCardHeight),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30.0),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 24.0),
+                          _buildHistorySection(items: _historyItems),
+                          const SizedBox(height: 24.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildHistorySection({required List<HistoryItem> items}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Center(
+            child: Text(
+              'History',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 12.0),
+          if (items.isEmpty)
+            const Center(
+              child: Text(
+                'No history found.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                return _buildHistoryCard(item: items[index]);
+              },
+              separatorBuilder: (context, index) => const SizedBox(height: 12.0),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryCard({required HistoryItem item}) {
+    Color getStatusColor(String status) {
+      if (status == 'Returned') return Colors.green;
+      if (status == 'Rejected') return Colors.red;
+      return Colors.grey;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.0),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.05),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Request ID #${item.requestId}',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  item.item,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.dateRange,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.status,
+                  style: TextStyle(
+                    color: getStatusColor(item.status),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Lender',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              Text(
+                item.lender,
+                style: const TextStyle(color: Colors.black, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Returned',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              Text(
+                item.returnedBy,
+                style: const TextStyle(color: Colors.black, fontSize: 14),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HistoryItem {
+  final String item;
+  final String dateRange;
+  final String lender;
+  final String returnedBy;
+  final String status;
+  final String requestId;
+
+  HistoryItem({
+    required this.item,
+    required this.dateRange,
+    required this.lender,
+    required this.returnedBy,
+    required this.status,
+    required this.requestId,
+  });
+
+  factory HistoryItem.fromJson(Map<String, dynamic> json) {
+    String formatDate(String? dateStr) {
+      if (dateStr == null) return 'N/A';
+      try {
+        final DateTime utcDateTime = DateTime.parse(dateStr);
+        final DateTime localDateTime = utcDateTime.toLocal();
+        return localDateTime.toString().split(' ')[0];
+      } catch (e) {
+        return dateStr.split('T')[0];
+      }
+    }
+
+    final String dateRange =
+        "${formatDate(json['borrow_date'])} To ${formatDate(json['return_date'])}";
+
+    final String requestStatus = json['request_status'] ?? 'Unknown';
+    final String requestId = (json['request_id'] ?? '').toString();
+
+    return HistoryItem(
+      item: json['asset_name'] ?? 'Unknown Item',
+      dateRange: dateRange,
+      lender: json['lender_name'] ?? '-',
+      returnedBy: json['staff_name'] ?? '-',
+      status: requestStatus,
+      requestId: requestId.isEmpty ? '-' : requestId,
     );
   }
 }
