@@ -535,6 +535,7 @@ class _StaffState extends State<Staff> {
     }
   }
 
+  // refresh กับ bottom nav bar
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -554,6 +555,7 @@ class _StaffState extends State<Staff> {
     );
   }
 
+  // Headder
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -651,6 +653,7 @@ class _StaffState extends State<Staff> {
     );
   }
 
+  // สร้าง table เอาไว้ดูข้อมูล ของ asset
   Widget _buildTable() {
     return Container(
       margin: const EdgeInsets.all(8),
@@ -712,6 +715,7 @@ class _StaffState extends State<Staff> {
     );
   }
 
+  //สร้าง bottom nav bar
   Widget _buildBottomNavBar() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),

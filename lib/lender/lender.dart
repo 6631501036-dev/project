@@ -221,11 +221,7 @@ class _LenderState extends State<Lender> {
 
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => MenuLender(
-          //request: request,
-        ),
-      ),
+      MaterialPageRoute(builder: (context) => MenuLenderPage(request: request)),
     );
 
     //เมื่อหน้ารายละเอียด "pop" (ปิด) กลับมา
