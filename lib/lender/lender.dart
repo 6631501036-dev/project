@@ -9,7 +9,7 @@ import 'package:flutter_application_1/login/login.dart';
 import 'menu_lender.dart';
 
 //กำหนด IP ของคุณ
-const String baseIp = "192.168.234.1:3000";
+const String baseIp = "192.168.110.142:3000";
 const String baseUrl = "http://$baseIp";
 
 class PendingRequest {
@@ -221,7 +221,11 @@ class _LenderState extends State<Lender> {
 
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => MenuLenderPage(request: request)),
+      MaterialPageRoute(
+        builder: (context) => MenuLender(
+          //request: request,
+        ),
+      ),
     );
 
     //เมื่อหน้ารายละเอียด "pop" (ปิด) กลับมา

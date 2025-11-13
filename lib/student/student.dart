@@ -68,6 +68,11 @@ class _StudentState extends State<Student> with RouteAware {
         ).showSnackBar(const SnackBar(content: Text("Please login again.")));
       }
       setState(() => _loading = false);
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
       return;
     }
 
@@ -500,6 +505,7 @@ class _StudentState extends State<Student> with RouteAware {
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 20),
                       Column(
                         children: equipmentList.map((item) {

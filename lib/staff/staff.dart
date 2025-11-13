@@ -65,7 +65,8 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      final url = Uri.parse("http://192.168.234.1:3000/assets");
+      // ❌ แก้ไข IP Address ให้ถูกต้อง หากมีการเปลี่ยนแปลง
+      final url = Uri.parse("http://192.168.110.142:3000/assets");
       final response = await http.get(
         url,
         headers: {'Authorization': 'Bearer $token'},
@@ -81,7 +82,8 @@ class _StaffState extends State<Staff> {
                   id: item['asset_id'].toString(),
                   name: item['asset_name'],
                   imagePath:
-                      "http://192.168.234.1:3000${item['image'] ?? '/public/image/default.jpg'}",
+                      // ❌ แก้ไข IP Address ให้ถูกต้อง
+                      "http://192.168.110.142:3000${item['image'] ?? '/public/image/default.jpg'}",
                   status: item['asset_status'],
                   statusColor: _getStatusColor(item['asset_status']),
                 ),
@@ -126,7 +128,7 @@ class _StaffState extends State<Staff> {
   Future<void> addAsset(String name, String description, [File? image]) async {
     try {
       // ❌ แก้ไข IP Address ให้ถูกต้อง
-      final uri = Uri.parse('http://192.168.234.1:3000/staff/addAsset');
+      final uri = Uri.parse('http://192.168.110.142:3000/staff/addAsset');
       var request = http.MultipartRequest('POST', uri);
       request.fields['name'] = name;
       request.fields['description'] = description;
@@ -157,7 +159,7 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
       // ❌ แก้ไข IP Address ให้ถูกต้อง
-      final uri = Uri.parse('http://192.168.234.1:3000/staff/editAsset/$id');
+      final uri = Uri.parse('http://192.168.110.142:3000/staff/editAsset/$id');
       var request = http.MultipartRequest('PUT', uri);
       request.headers['Authorization'] = 'Bearer $token'; // เพิ่ม token
       request.fields['name'] = name;
@@ -283,7 +285,7 @@ class _StaffState extends State<Staff> {
           : "disable"; // Available -> Disable
 
       final url = Uri.parse(
-        "http://192.168.234.1:3000/staff/editAsset/$assetId/$endpoint",
+        "http://192.168.110.142:3000/staff/editAsset/$assetId/$endpoint",
       );
 
       final response = await http.put(
@@ -343,7 +345,7 @@ class _StaffState extends State<Staff> {
         final token = await storage.read(key: 'token');
         // ❌ แก้ไข IP Address ให้ถูกต้อง
         final url = Uri.parse(
-          "http://192.168.234.1:3000/staff/deleteAsset/$id",
+          "http://192.168.110.142:3000/staff/deleteAsset/$id",
         );
         final response = await http.delete(
           url,

@@ -34,7 +34,7 @@ class _RegisterState extends State<Register> {
 
   Future<void> registerUser() async {
     final url = Uri.parse(
-      'http://192.168.234.1:3000/register',
+      'http://192.168.110.142:3000/register',
     ); // เปลี่ยนเลข IP address เป็นของตัวเอง
 
     // ตรวจสอบช่องว่าง
