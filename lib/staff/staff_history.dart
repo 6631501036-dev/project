@@ -27,7 +27,7 @@ class StaffHistory extends StatefulWidget {
 class _StaffHistoryState extends State<StaffHistory> {
   int _selectedIndex = 3;
   
-  final String baseUrl = "http://192.168.1.6:3000/api";
+  final String baseUrl = "http://192.168.110.142:3000/api";
   int? userId;
 
   bool _isLoading = true;

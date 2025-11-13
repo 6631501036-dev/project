@@ -52,7 +52,7 @@ class _StaffState extends State<Staff> {
   //ตัวแปร state เก็บสรุป
   int totalAssets = 0;
   int availableCount = 0;
-  int pendingCount = 0;in
+  int pendingCount = 0;
   int borrowedCount = 0;
   int disabledCount = 0;
 

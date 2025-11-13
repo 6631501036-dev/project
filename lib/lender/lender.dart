@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
 import 'menu_lender.dart';
 
-const String baseIp = "192.168.0.37:3000";
+const String baseIp = "192.168.110.142:3000";
 const String baseUrl = "http://$baseIp";
 
 class PendingRequest {
@@ -413,7 +413,7 @@ class _LenderState extends State<Lender> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const LenderHistory(),
+                                builder: (context) => const Lenderhistory(),
                               ),
                             );
                           },

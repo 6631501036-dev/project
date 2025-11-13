@@ -15,7 +15,7 @@ class Lenderhistory extends StatefulWidget {
 }
 
 class _LenderhistoryState extends State<Lenderhistory> {
-  final String baseUrl = "http://192.168.1.6:3000/api";
+  final String baseUrl = "http://192.168.110.142:3000/api";
   int? userId;
 
   bool _isLoading = true;
