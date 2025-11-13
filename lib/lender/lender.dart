@@ -560,6 +560,7 @@ class _LenderState extends State<Lender> {
                                 name: request.assetName,
                                 imagePath: request.assetImage,
                                 loanStatus: request.loanStatus,
+
                                 onPressed: () {
                                   _navigateToDetail(request);
                                 },

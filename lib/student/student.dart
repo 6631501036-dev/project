@@ -286,6 +286,9 @@ class _StudentState extends State<Student> with RouteAware {
       if (!mounted) return;
 
       if (res.statusCode == 200) {
+        // ✅ แจ้งเตือน staff ทันทีหลัง student return
+        await http.post(Uri.parse("$baseApi/notifyReturn"));
+
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text("Return successful")));
@@ -533,15 +536,42 @@ class _StudentState extends State<Student> with RouteAware {
                         ..._filteredList.map((item) {
                           final String assetStatus =
                               (item['asset_status'] ?? 'Available').toString();
-                          final bool isAvailable = assetStatus == 'Available';
-                          final String displayStatus = isAvailable
-                              ? 'Available'
-                              : 'Unavailable';
-                          final Color statusColor = isAvailable
-                              ? Colors.green
-                              : Colors.grey;
-                          final bool enableBorrow = isAvailable;
+                          final String returnStatus =
+                              (item['return_status'] ?? '').toString();
 
+                          late final String displayStatus;
+                          late final Color statusColor;
+                          bool enableBorrow = false;
+
+                          if (returnStatus.toLowerCase() == 'request return' ||
+                              returnStatus.toLowerCase() ==
+                                  'requested return') {
+                            // ถ้า return_status เป็น Request Return
+                            displayStatus = 'Request Return';
+                            statusColor = Colors.purple;
+                            enableBorrow = false;
+                          } else if (assetStatus == 'Available') {
+                            displayStatus = 'Available';
+                            statusColor = Colors.green;
+                            enableBorrow = true;
+                          } else if (assetStatus == 'Pending') {
+                            displayStatus = 'Pending';
+                            statusColor = Colors.orange;
+                            enableBorrow = false;
+                          } else if (assetStatus == 'Borrowed') {
+                            displayStatus = 'Borrowed';
+                            statusColor = Colors.blue;
+                            enableBorrow = false;
+                          } else if (assetStatus == 'Disabled') {
+                            displayStatus = 'Disabled';
+                            statusColor = Colors.red;
+                            enableBorrow = false;
+                          } else {
+                            displayStatus = 'Unknown';
+                            statusColor = Colors.grey;
+                            enableBorrow = false;
+                          }
+                          //final bool enableBorrow = isAvailable;
                           return Column(
                             children: [
                               Row(

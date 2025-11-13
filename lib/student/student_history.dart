@@ -64,7 +64,9 @@ class _Student_historyState extends State<Student_history> {
         setState(() {
           _historyItems = data
               .map((jsonItem) => HistoryItem.fromJson(jsonItem))
-              .toList();
+              .toList()
+              .reversed
+              .toList(); // ทำให้ล่าสุดอยู่บน
         });
       } else {
         if (mounted) {
@@ -214,9 +216,20 @@ class _Student_historyState extends State<Student_history> {
 
   Widget _buildHistoryCard({required HistoryItem item}) {
     Color getStatusColor(String status) {
-      if (status == 'Returned') return Colors.green;
-      if (status == 'Rejected') return Colors.red;
-      return Colors.grey;
+      switch (status) {
+        case 'Pending':
+          return Colors.orange;
+        case 'Rejected':
+          return Colors.red;
+        case 'Request Return':
+          return Colors.purple;
+        case 'Borrowed':
+          return Colors.blue;
+        case 'Returned':
+          return Colors.deepPurpleAccent;
+        default:
+          return Colors.grey;
+      }
     }
 
     return Container(
@@ -330,13 +343,20 @@ class HistoryItem {
     String finalReturnedBy = '-';
 
     if (returnStatus == 'Returned') {
-      // กรณี "คืนแล้ว": คือสถานะสุดท้าย
       finalStatus = 'Returned';
-      finalReturnedBy = json['staff_name'] ?? 'Returned'; // แสดงชื่อ Staff
+      finalReturnedBy = json['staff_name'] ?? 'Returned';
+    } else if (requestStatus == 'Approved' && returnStatus == 'Not Returned') {
+      // ถ้าอนุมัติแล้วยังไม่คืน ให้แสดงเป็น Borrowed
+      finalStatus = 'Borrowed';
+    } else if (requestStatus == 'Approved' &&
+        returnStatus == 'Requested Return') {
+      finalStatus = 'Request Return'; // เปลี่ยนชื่อสถานะเป็น 'Request Return'
+    } else if (requestStatus == 'Rejected') {
+      finalStatus = 'Rejected'; // เปลี่ยนชื่อสถานะเป็น 'Rejected'
     } else {
-      // กรณี "ยังไม่คืน": ให้ใช้สถานะการอนุมัติ
       finalStatus = requestStatus;
     }
+
     return HistoryItem(
       item: json['asset_name'] ?? 'Unknown Item',
       dateRange: dateRange,
