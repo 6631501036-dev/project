@@ -16,18 +16,51 @@ class Student extends StatefulWidget {
 }
 
 class _StudentState extends State<Student> with RouteAware {
-  final String baseApi = "http://192.168.110.142:3000/api";
-  int? borrowerId; // user_id
+  final String baseApi = "http://192.168.0.37:3000/api";
+  int? borrowerId;
   List<Map<String, dynamic>> equipmentList = [];
+  List<Map<String, dynamic>> _filteredList = [];
   Map<String, dynamic>? _activeStatusItem;
   bool _loading = true;
-
   int canBorrowToday = 1;
+
+  // Search
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
     fetchAssets();
+
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase().trim();
+        _filterEquipment();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  void _filterEquipment() {
+    if (_searchQuery.isEmpty) {
+      _filteredList = equipmentList;
+    } else {
+      _filteredList = equipmentList
+          .where(
+            (item) => (item['asset_name'] ?? '')
+                .toString()
+                .toLowerCase()
+                .contains(_searchQuery),
+          )
+          .toList();
+    }
   }
 
   @override
@@ -41,25 +74,14 @@ class _StudentState extends State<Student> with RouteAware {
     fetchAssets();
   }
 
-  @override
-  void dispose() {
-    routeObserver.unsubscribe(this);
-    super.dispose();
-  }
-
   Future<void> fetchAssets() async {
     setState(() {
       _loading = true;
       _activeStatusItem = null;
-      // รีเซ็ตสถานะก่อนโหลด
     });
-    // default = 1
-    // ========== ดึง user_id จาก token ==========
+
     final storage = FlutterSecureStorage();
     String? token = await storage.read(key: 'token');
-
-    final jwt = JWT.decode(token!);
-    Map playload = jwt.payload;
 
     if (token == null) {
       if (mounted) {
@@ -76,10 +98,12 @@ class _StudentState extends State<Student> with RouteAware {
       return;
     }
 
-    borrowerId = playload['user_id'] as int;
+    final jwt = JWT.decode(token);
+    Map payload = jwt.payload;
+    borrowerId = payload['user_id'] as int;
 
     try {
-      // --- API ตัวที่ 1: เช็กสถานะ ---
+      // API 1: Status
       final statusUrl = Uri.parse('$baseApi/student/status/$borrowerId');
       final statusResponse = await http
           .get(statusUrl)
@@ -87,59 +111,43 @@ class _StudentState extends State<Student> with RouteAware {
 
       if (statusResponse.statusCode == 200) {
         final statusData = jsonDecode(statusResponse.body);
-
         setState(() {
-          if (statusData != null) {
-            canBorrowToday = statusData['can_borrow_today'] ?? 0;
-
-            final String assetStatus = statusData['asset_status'] ?? '';
-            _activeStatusItem =
-                (assetStatus == 'Pending' || assetStatus == 'Borrowed') &&
-                    statusData['return_status'] != 'Returned'
-                ? statusData as Map<String, dynamic>
-                : null;
-          } else {
-            canBorrowToday = 1; // default value
-            _activeStatusItem = null;
-          }
+          canBorrowToday = statusData['can_borrow_today'] ?? 0;
+          final String assetStatus = statusData['asset_status'] ?? '';
+          _activeStatusItem =
+              (assetStatus == 'Pending' || assetStatus == 'Borrowed') &&
+                  statusData['return_status'] != 'Returned'
+              ? statusData
+              : null;
         });
       }
 
-      // --- API ตัวที่ 2: ดึงรายการอุปกรณ์ ---
+      // API 2: Assets
       final assetUrl = Uri.parse(
         '$baseApi/student/asset?borrower_id=$borrowerId',
       );
       final assetResponse = await http
           .get(assetUrl)
           .timeout(const Duration(seconds: 10));
-      print("assetResponse: ${assetResponse.body}");
 
       if (assetResponse.statusCode == 200) {
         final data = jsonDecode(assetResponse.body);
         if (data['success'] == true) {
           setState(() {
-            equipmentList = List<Map<String, dynamic>>.from(
-              data['assets'] as List,
-            );
+            equipmentList = List<Map<String, dynamic>>.from(data['assets']);
+            _filteredList = equipmentList;
           });
         } else {
           setState(() {
             equipmentList = [];
+            _filteredList = [];
           });
         }
       } else {
         setState(() {
           equipmentList = [];
+          _filteredList = [];
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Failed to load assets: ${assetResponse.statusCode}',
-              ),
-            ),
-          );
-        }
       }
     } catch (e) {
       print("fetchAssets error: $e");
@@ -186,7 +194,6 @@ class _StudentState extends State<Student> with RouteAware {
 
   Future<bool> _hasActiveRequest() async {
     if (_activeStatusItem == null) return false;
-
     final status = _activeStatusItem!['asset_status']?.toString();
     return status == 'Pending' || status == 'Borrowed';
   }
@@ -228,13 +235,7 @@ class _StudentState extends State<Student> with RouteAware {
   }
 
   Future<void> borrowEquipment(int assetId, String assetName) async {
-    if (borrowerId == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("No borrower ID found")));
-      return;
-    }
+    if (borrowerId == null) return;
 
     final body = {
       "borrower_id": borrowerId.toString(),
@@ -260,7 +261,7 @@ class _StudentState extends State<Student> with RouteAware {
       if (res.statusCode == 200) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("Borrow request sent ✅")));
+        ).showSnackBar(const SnackBar(content: Text("Borrow request sent")));
         await fetchAssets();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -268,13 +269,10 @@ class _StudentState extends State<Student> with RouteAware {
         );
       }
     } catch (e) {
-      print("Borrow error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Network error while sending borrow request"),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Network error")));
       }
     }
   }
@@ -293,8 +291,8 @@ class _StudentState extends State<Student> with RouteAware {
 
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text("Return successful ✅")));
-        await fetchAssets(); // reload assets & status
+        ).showSnackBar(const SnackBar(content: Text("Return successful")));
+        await fetchAssets();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Return failed: ${res.statusCode}")),
@@ -302,9 +300,9 @@ class _StudentState extends State<Student> with RouteAware {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Network error during return")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Network error")));
       }
     }
   }
@@ -326,16 +324,11 @@ class _StudentState extends State<Student> with RouteAware {
     }
   }
 
-  // อย่าลืมเปลี่ยน IP ด้วยเดี๋ยวรูปไม่ขึ้น
-  final String imageBaseUrl = "http://192.168.110.142:3000";
-  // อย่าลืมเปลี่ยน IP ด้วยเดี๋ยวรูปไม่ขึ้น
-  // 🟢 แก้ไขฟังก์ชันนี้
+  final String imageBaseUrl = "http://192.168.0.37:3000";
   String buildImageUrl(String? imageField) {
-    // 1. กรณีที่ไม่มีรูปภาพ (null หรือ empty)
     if (imageField == null || imageField.isEmpty) {
       return "$imageBaseUrl/public/image/default.jpg";
     } else {
-      // 2. กรณีที่มีรูปภาพ
       return "$imageBaseUrl$imageField";
     }
   }
@@ -368,30 +361,23 @@ class _StudentState extends State<Student> with RouteAware {
           ),
         ],
       ),
-
       body: RefreshIndicator(
         onRefresh: fetchAssets,
         child: _loading
-            ? ListView(
-                children: const [
-                  SizedBox(height: 60),
-                  Center(child: CircularProgressIndicator()),
-                ],
-              )
+            ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      // ข้อความจำนวนที่สามารถยืมได้
+                      // Can Borrow Today
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8.0),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
                           children: [
                             if (canBorrowToday > 0)
-                              Icon(Icons.book, color: Colors.blue),
+                              const Icon(Icons.book, color: Colors.blue),
                             const SizedBox(width: 4),
                             Text(
                               "Can borrow today: $canBorrowToday",
@@ -405,19 +391,48 @@ class _StudentState extends State<Student> with RouteAware {
                       ),
 
                       const SizedBox(height: 8),
-                      // Row ของปุ่ม 3 ปุ่ม
+
+                      // Search Bar
+                      Material(
+                        elevation: 3,
+                        borderRadius: BorderRadius.circular(30),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: "search",
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              color: Colors.blue,
+                            ),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () => _searchController.clear(),
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Buttons
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const Student_status(),
-                                ),
-                              ).then((_) => fetchAssets());
-                            },
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const Student_status(),
+                              ),
+                            ).then((_) => fetchAssets()),
                             icon: const Icon(
                               Icons.manage_search_rounded,
                               color: Colors.black,
@@ -430,14 +445,12 @@ class _StudentState extends State<Student> with RouteAware {
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const Student_history(),
-                                ),
-                              ).then((_) => fetchAssets());
-                            },
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const Student_history(),
+                              ),
+                            ).then((_) => fetchAssets()),
                             icon: const Icon(
                               Icons.history_rounded,
                               color: Colors.black,
@@ -507,8 +520,20 @@ class _StudentState extends State<Student> with RouteAware {
                       ),
 
                       const SizedBox(height: 20),
-                      Column(
-                        children: equipmentList.map((item) {
+
+                      // Equipment List
+                      if (_filteredList.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            _searchQuery.isEmpty
+                                ? "No equipment"
+                                : "No equipment found for \"$_searchQuery\"",
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        )
+                      else
+                        ..._filteredList.map((item) {
                           final String assetStatus =
                               (item['asset_status'] ?? 'Available').toString();
                           final String returnStatus =
@@ -575,12 +600,10 @@ class _StudentState extends State<Student> with RouteAware {
                                         const SizedBox(height: 8),
                                         ElevatedButton(
                                           onPressed: enableBorrow
-                                              ? () {
-                                                  confirmBorrow(
-                                                    item['asset_id'],
-                                                    item['asset_name'],
-                                                  );
-                                                }
+                                              ? () => confirmBorrow(
+                                                  item['asset_id'],
+                                                  item['asset_name'],
+                                                )
                                               : null,
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: enableBorrow
@@ -617,7 +640,6 @@ class _StudentState extends State<Student> with RouteAware {
                             ],
                           );
                         }).toList(),
-                      ),
                     ],
                   ),
                 ),
