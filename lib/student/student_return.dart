@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_application_1/config/config.dart';
 
 class StudentReturn extends StatefulWidget {
   final int borrowerId;
@@ -12,7 +13,7 @@ class StudentReturn extends StatefulWidget {
 
 class _StudentReturnState extends State<StudentReturn> {
   List<Map<String, dynamic>> borrowedItems = [];
-  final String baseUrl = "http://192.168.0.52:3000";
+  final String baseUrl = "http://$defaultIp:$defaultPort";
 
   @override
   void initState() {

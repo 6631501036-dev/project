@@ -7,9 +7,10 @@ import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
 import 'menu_lender.dart';
+import 'package:flutter_application_1/config/config.dart';
 
-const String baseIp = "192.168.0.52:3000";
-const String baseUrl = "http://$baseIp";
+final String baseIp = "$defaultIp:$defaultPort";
+final String baseUrl = "http://$baseIp";
 
 class PendingRequest {
   final int requestId;

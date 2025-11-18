@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter_application_1/config/config.dart';
 
 class Register extends StatefulWidget {
   const Register({super.key});
@@ -34,7 +35,7 @@ class _RegisterState extends State<Register> {
 
   Future<void> registerUser() async {
     final url = Uri.parse(
-      'http://192.168.0.52:3000/register',
+      'http://$defaultIp:$defaultPort/register',
     ); // เปลี่ยนเลข IP address เป็นของตัวเอง
 
     // ตรวจสอบช่องว่าง

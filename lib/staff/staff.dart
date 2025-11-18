@@ -8,6 +8,7 @@ import 'package:flutter_application_1/login/login.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_application_1/config/config.dart';
 
 // Class สำหรับข้อมูลสินทรัพย์
 class Product {
@@ -94,7 +95,7 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      final url = Uri.parse("http://192.168.0.52:3000/assets");
+      final url = Uri.parse("http://$defaultIp:$defaultPort/assets");
       final response = await http.get(
         url,
         headers: {'Authorization': 'Bearer $token'},
@@ -110,7 +111,7 @@ class _StaffState extends State<Staff> {
                   id: item['asset_id'].toString(),
                   name: item['asset_name'],
                   imagePath:
-                      "http://192.168.0.52:3000${item['image'] ?? '/public/image/default.jpg'}",
+                      "http://$defaultIp:$defaultPort${item['image'] ?? '/public/image/default.jpg'}",
                   status: item['asset_status'],
                   statusColor: _getStatusColor(item['asset_status']),
                 ),
@@ -154,7 +155,7 @@ class _StaffState extends State<Staff> {
   // เพิ่มสินทรัพย์ใหม่
   Future<void> addAsset(String name, String description, [File? image]) async {
     try {
-      final uri = Uri.parse('http://192.168.0.52:3000/staff/addAsset');
+      final uri = Uri.parse('http://$defaultIp:$defaultPort/staff/addAsset');
       var request = http.MultipartRequest('POST', uri);
       request.fields['name'] = name;
       request.fields['description'] = description;
@@ -184,7 +185,7 @@ class _StaffState extends State<Staff> {
     try {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
-      final uri = Uri.parse('http://192.168.0.52:3000/staff/editAsset/$id');
+      final uri = Uri.parse('http://$defaultIp:$defaultPort/staff/editAsset/$id');
       var request = http.MultipartRequest('PUT', uri);
       request.headers['Authorization'] = 'Bearer $token';
       request.fields['name'] = name;
@@ -290,7 +291,7 @@ class _StaffState extends State<Staff> {
       final token = await storage.read(key: 'token');
       final endpoint = currentStatus == "Disabled" ? "enable" : "disable";
       final url = Uri.parse(
-        "http://192.168.0.52:3000/staff/editAsset/$assetId/$endpoint",
+        "http://$defaultIp:$defaultPort/staff/editAsset/$assetId/$endpoint",
       );
 
       final response = await http.put(
@@ -340,7 +341,7 @@ class _StaffState extends State<Staff> {
       try {
         final storage = FlutterSecureStorage();
         final token = await storage.read(key: 'token');
-        final url = Uri.parse("http://192.168.0.52:3000/staff/deleteAsset/$id");
+        final url = Uri.parse("http://$defaultIp:$defaultPort/staff/deleteAsset/$id");
         final response = await http.delete(
           url,
           headers: {'Authorization': 'Bearer $token'},
@@ -436,7 +437,7 @@ class _StaffState extends State<Staff> {
 
       // ✅ แก้ URL ให้ถูก
       final url = Uri.parse(
-        'http://192.168.0.52:3000/staff/dashboard/${widget.staffId}',
+        'http://$defaultIp:$defaultPort/staff/dashboard/${widget.staffId}',
       );
       final response = await http.get(
         url,
@@ -473,7 +474,7 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      final url = Uri.parse("http://192.168.0.52:3000/api/returnCount");
+      final url = Uri.parse("http://$defaultIp:$defaultPort/api/returnCount");
       final response = await http.get(
         url,
         headers: {
@@ -501,7 +502,7 @@ class _StaffState extends State<Staff> {
       final token = await storage.read(key: 'token');
 
       final url = Uri.parse(
-        "http://192.168.0.52:3000/api/clearReturnNotifications",
+        "http://$defaultIp:$defaultPort/api/clearReturnNotifications",
       );
       final response = await http.delete(
         url,

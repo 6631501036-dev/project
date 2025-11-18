@@ -9,6 +9,7 @@ import 'package:flutter_application_1/staff/request.dart';
 import 'package:flutter_application_1/staff/staff.dart';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_application_1/config/config.dart';
 
 class StaffHistory extends StatefulWidget {
   final int staffId;
@@ -27,7 +28,7 @@ class StaffHistory extends StatefulWidget {
 class _StaffHistoryState extends State<StaffHistory> {
   int _selectedIndex = 3;
 
-  final String baseUrl = "http://192.168.0.52:3000/api";
+  final String baseUrl = "http://$defaultIp:$defaultPort/api";
   int? userId;
 
   bool _isLoading = true;

@@ -5,6 +5,7 @@ import 'package:flutter_application_1/staff/menu_staff.dart';
 import 'package:flutter_application_1/staff/staff.dart';
 import 'package:flutter_application_1/staff/staff_history.dart';
 import 'package:flutter_application_1/login/login.dart';
+import 'package:flutter_application_1/config/config.dart';
 
 class Request extends StatefulWidget {
   final int staffId;
@@ -28,7 +29,7 @@ class _RequestState extends State<Request> {
   Future<void> fetchRequests() async {
     try {
       final res = await http.get(
-        Uri.parse("http://192.168.0.52:3000/staff/request/${widget.staffId}"),
+        Uri.parse("http://$defaultIp:$defaultPort/staff/request/${widget.staffId}"),
       );
 
       if (res.statusCode == 200) {
@@ -65,7 +66,7 @@ class _RequestState extends State<Request> {
   Future<void> returnAsset(int requestId) async {
     try {
       final res = await http.put(
-        Uri.parse("http://192.168.0.52:3000/staff/returnAsset/$requestId"),
+        Uri.parse("http://$defaultIp:$defaultPort/staff/returnAsset/$requestId"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"staff_id": widget.staffId}),
       );
@@ -112,7 +113,7 @@ class _RequestState extends State<Request> {
   // แจ้งเตือน
   Future<void> fetchNotificationCount() async {
     final res = await http.get(
-      Uri.parse("http://192.168.0.52:3000/api/returnCount"),
+      Uri.parse("http://$defaultIp:$defaultPort/api/returnCount"),
     );
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
@@ -475,7 +476,7 @@ class _RequestState extends State<Request> {
           if (index == 1) {
             await http.delete(
               Uri.parse(
-                "http://192.168.0.52:3000/api/clearReturnNotifications",
+                "http://$defaultIp:$defaultPort/api/clearReturnNotifications",
               ),
             );
             setState(() => _notificationCount = 0);
