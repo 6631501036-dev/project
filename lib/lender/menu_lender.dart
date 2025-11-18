@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 //Import โมเดล PendingRequest (จากไฟล์ lender.dart)
 import 'lender.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 class MenuLenderPage extends StatefulWidget {
   final PendingRequest request;
 
-  const MenuLenderPage({
-    Key? key,
-    required this.request,
-  }) : super(key: key);
+  const MenuLenderPage({Key? key, required this.request}) : super(key: key);
 
   @override
   State<MenuLenderPage> createState() => _MenuLenderPageState();
 }
 
 class _MenuLenderPageState extends State<MenuLenderPage> {
+  Future<Map<String, String>> _getAuthHeader() async {
+    final storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
+    return token != null ? {'Authorization': 'Bearer $token'} : {};
+  }
+  // Use _getAuthHeader() when making API requests, e.g.:
+  // final headers = await _getAuthHeader();
+  // final response = await http.get(url, headers: headers);
 
   Future<void> _showDisapproveDialog() async {
     TextEditingController reasonController = TextEditingController();
@@ -45,9 +52,7 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () {
               final reason = reasonController.text.trim();
               if (reason.isNotEmpty) {
@@ -66,6 +71,7 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
       }
     }
   }
+
   // ฟังก์ชัน format วันที่ (borrow Date)
   String _formatDate(String? dateString) {
     if (dateString == null) return "N/A";
@@ -80,16 +86,17 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
       final String year = localDateTime.year.toString();
       return "$day/$month/$year";
     } catch (e) {
-      return dateString; 
+      return dateString;
     }
   }
+
   // ฟังก์ชันคำนวณวันคืน (Return Date)
   String _getReturnDate(String? dateString) {
     if (dateString == null) return "N/A";
     try {
       // 1. แปลง String (ISO/UTC) เป็น DateTime
       final DateTime utcDateTime = DateTime.parse(dateString);
-      // แปลงเป็นเวลาท้องถิ่น (Local Time) 
+      // แปลงเป็นเวลาท้องถิ่น (Local Time)
       final DateTime localDateTime = utcDateTime.toLocal();
       // 3. บวกไปอีก 7 วัน
       final DateTime returnDate = localDateTime.add(const Duration(days: 7));
@@ -102,7 +109,6 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
       return "N/A";
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -117,10 +123,7 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
         ),
         title: const Text(
           'Review Request',
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
@@ -138,7 +141,6 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                 
                   Center(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
@@ -151,8 +153,11 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
                           height: 150,
                           width: 150,
                           color: Colors.grey.shade200,
-                          child: const Icon(Icons.broken_image,
-                              size: 50, color: Colors.grey),
+                          child: const Icon(
+                            Icons.broken_image,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
                         ),
                       ),
                     ),
@@ -173,13 +178,12 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
                     value: widget.request.borrowerName,
                   ),
                   _DetailRow(
-                    label: "Borrow Date:", 
-                    value: _formatDate(widget.request.borrowDate), 
+                    label: "Borrow Date:",
+                    value: _formatDate(widget.request.borrowDate),
                   ),
                   _DetailRow(
                     label: "Return Date:",
-                    value: _getReturnDate(widget.request.borrowDate), 
-                    
+                    value: _getReturnDate(widget.request.borrowDate),
                   ),
 
                   const Divider(height: 30),
@@ -192,10 +196,14 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
                           onPressed: () {
                             Navigator.pop(context, 'approve');
                           },
-                          icon: const Icon(Icons.check_circle,
-                              color: Colors.white),
-                          label: const Text('Approve',
-                              style: TextStyle(color: Colors.white)),
+                          icon: const Icon(
+                            Icons.check_circle,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            'Approve',
+                            style: TextStyle(color: Colors.white),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             shape: RoundedRectangleBorder(
@@ -212,8 +220,10 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
                             _showDisapproveDialog();
                           },
                           icon: const Icon(Icons.cancel, color: Colors.white),
-                          label: const Text('Disapprove',
-                              style: TextStyle(color: Colors.white)),
+                          label: const Text(
+                            'Disapprove',
+                            style: TextStyle(color: Colors.white),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             shape: RoundedRectangleBorder(
@@ -224,7 +234,7 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
                         ),
                       ),
                     ],
-                  )
+                  ),
                 ],
               ),
             ),
@@ -235,17 +245,12 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
   }
 }
 
-
 class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
-  final Color? valueColor; 
+  final Color? valueColor;
 
-  const _DetailRow({
-    required this.label, 
-    required this.value,
-    this.valueColor 
-  });
+  const _DetailRow({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
@@ -256,10 +261,7 @@ class _DetailRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey.shade600,
-            ),
+            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
           ),
           Flexible(
             child: Text(
@@ -267,7 +269,7 @@ class _DetailRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: valueColor ?? Colors.black, 
+                color: valueColor ?? Colors.black,
               ),
               textAlign: TextAlign.end,
             ),

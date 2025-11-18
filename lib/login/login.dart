@@ -20,7 +20,7 @@ class _LoginState extends State<Login> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   // URL ของเซิร์ฟเวอร์ สามาเปลี่ยนได้***********************************************************อย่าลืมเปลี่ยนนะ************************************
-  final url = '192.168.110.142:3000';
+  final url = '192.168.0.52:3000';
   bool _isLoading = false; // เผื่อไว้แสดงสถานะโหลดตอนกด Log in
 
   Future<void> _login() async {

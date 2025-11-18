@@ -15,7 +15,7 @@ class Lenderhistory extends StatefulWidget {
 }
 
 class _LenderhistoryState extends State<Lenderhistory> {
-  final String baseUrl = "http://192.168.110.142:3000/api";
+  final String baseUrl = "http://192.168.0.52:3000/api";
   int? userId;
 
   bool _isLoading = true;
@@ -56,8 +56,13 @@ class _LenderhistoryState extends State<Lenderhistory> {
     });
 
     try {
+      final storage = FlutterSecureStorage();
+      String? token = await storage.read(key: 'token');
       final response = await http
-          .get(Uri.parse('$baseUrl/lender/history/$userId'))
+          .get(
+            Uri.parse('$baseUrl/lender/history/$userId'),
+            headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+          )
           .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200 && mounted) {
         final List<dynamic> data = json.decode(response.body);
@@ -204,7 +209,8 @@ class _LenderhistoryState extends State<Lenderhistory> {
               itemBuilder: (context, index) {
                 return _buildHistoryCard(item: items[index]);
               },
-              separatorBuilder: (context, index) => const SizedBox(height: 12.0),
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: 12.0),
             ),
         ],
       ),
