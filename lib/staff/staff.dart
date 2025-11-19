@@ -197,8 +197,11 @@ class _StaffState extends State<Staff> {
   // เพิ่มสินทรัพย์ใหม่
   Future<void> addAsset(String name, String description, [File? image]) async {
     try {
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
       final uri = Uri.parse('$baseUrl/staff/addAsset');
       var request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
       request.fields['name'] = name;
       request.fields['description'] = description;
       if (image != null) {
@@ -227,6 +230,7 @@ class _StaffState extends State<Staff> {
     try {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
+
       final uri = Uri.parse('$baseUrl/staff/editAsset/$id');
       var request = http.MultipartRequest('PUT', uri);
       request.headers['Authorization'] = 'Bearer $token';
