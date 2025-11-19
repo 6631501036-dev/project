@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 //Import โมเดล PendingRequest (จากไฟล์ lender.dart)
-import 'package:flutter_application_1/lender/lender.dart';
+import 'lender.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class MenuLenderPage extends StatefulWidget {
@@ -125,16 +125,7 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
           'Review Request',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(
-              Icons.logout_rounded,
-            ), // Replace with custom icon if needed
-            onPressed: () {
-              // Logout logic
-            },
-          ),
-        ],
+        centerTitle: true,
       ),
       body: SafeArea(
         child: Padding(
@@ -194,12 +185,11 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
                     label: "Return Date:",
                     value: _getReturnDate(widget.request.borrowDate),
                   ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Column(
-                children: equipmentList.map((item) {
-                  return Column(
+
+                  const Divider(height: 30),
+
+                  // (ปุ่ม Actions... เหมือนเดิม)
+                  Row(
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
@@ -239,16 +229,15 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          Image.asset(item['image'], width: 80),
-                        ],
+                        ),
                       ),
-                      const Divider(),
                     ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
