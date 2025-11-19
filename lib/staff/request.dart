@@ -142,7 +142,7 @@ class _RequestState extends State<Request> {
 
       final res = await http.put(
         Uri.parse("$baseUrl/staff/returnAsset/$requestId"),
-        headers: {"Authorization": "Bearer $token"},
+        headers: {"Authorization": "Bearer $token", "Content-Type": "application/json"},
         body: jsonEncode({"staff_id": staffId}),
       );
 

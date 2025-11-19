@@ -52,6 +52,7 @@ class _StaffHistoryState extends State<StaffHistory> {
     await _fetchData();
   }
 
+// ...existing code...
   Future<void> _fetchData() async {
     if (staffId == null) return;
     setState(() {
@@ -60,38 +61,67 @@ class _StaffHistoryState extends State<StaffHistory> {
     });
 
     try {
-      final response = await http
-          .get(Uri.parse('$baseUrl/staff/history'))
-          .timeout(const Duration(seconds: 10));
+      final uri = Uri.parse('$baseUrl/staff/history');
+      debugPrint('GET -> $uri');
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      debugPrint('Response status: ${response.statusCode}');
       if (response.statusCode == 200 && mounted) {
         final List<dynamic> data = json.decode(response.body);
+        debugPrint('Raw items count: ${data.length}');
+        if (data.isNotEmpty) debugPrint('Sample item: ${data[0].toString()}');
+
+        DateTime parseSafe(dynamic v) {
+          if (v == null) return DateTime.fromMillisecondsSinceEpoch(0);
+          try {
+            String s = v.toString();
+            // MySQL DATETIME often "YYYY-MM-DD HH:MM:SS" -> convert to ISO-like
+            if (s.contains(' ') && !s.contains('T')) s = s.replaceFirst(' ', 'T');
+            return DateTime.parse(s).toLocal();
+          } catch (_) {
+            // if numeric timestamp (seconds) or milliseconds
+            try {
+              final n = int.parse(v.toString());
+              // detect seconds vs ms
+              if (n < 10000000000) {
+                return DateTime.fromMillisecondsSinceEpoch(n * 1000);
+              } else {
+                return DateTime.fromMillisecondsSinceEpoch(n);
+              }
+            } catch (_) {
+              return DateTime.fromMillisecondsSinceEpoch(0);
+            }
+          }
+        }
+
+        // Sort descending (newest first)
+        data.sort((a, b) {
+          final da = parseSafe(a['borrow_date']);
+          final db = parseSafe(b['borrow_date']);
+          return db.compareTo(da);
+        });
+
         setState(() {
-          _historyItems = data
-              .map((jsonItem) => HistoryItem.fromJson(jsonItem))
-              .toList()
-              .reversed
-              .toList(); // ทำให้ล่าสุดอยู่บน
+          _historyItems =
+              data.map((jsonItem) => HistoryItem.fromJson(jsonItem)).toList();
         });
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to load history: ${response.statusCode}'),
-            ),
+            SnackBar(content: Text('Failed to load history: ${response.statusCode}')),
           );
         }
       }
     } catch (e) {
-      print("Error fetching history: $e");
+      debugPrint("Error fetching history: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Network error while loading history")),
-        );
+            const SnackBar(content: Text("Network error while loading history")));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+// ...existing code...
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
@@ -407,33 +437,39 @@ class HistoryItem {
     required this.requestId,
   });
 
-  factory HistoryItem.fromJson(Map<String, dynamic> json) {
-    String formatDate(String? dateStr) {
+factory HistoryItem.fromJson(Map<String, dynamic> json) {
+    String formatDate(dynamic dateStr) {
       if (dateStr == null) return 'N/A';
       try {
-        final DateTime utcDateTime = DateTime.parse(dateStr);
+        final String s = dateStr.toString();
+        final DateTime utcDateTime = DateTime.parse(s);
         final DateTime localDateTime = utcDateTime.toLocal();
         return localDateTime.toString().split(' ')[0];
       } catch (e) {
-        return dateStr.split('T')[0];
+        try {
+          return dateStr.toString().split('T')[0];
+        } catch (_) {
+          return dateStr.toString();
+        }
       }
     }
 
-    final String dateRange =
-        "${formatDate(json['borrow_date'])} To ${formatDate(json['return_date'])}";
+    final String borrowDate = formatDate(json['borrow_date']);
+    final String returnDate = formatDate(json['return_date']);
+    final String dateRange = "$borrowDate To $returnDate";
 
-    final String requestStatus = json['request_status'] ?? 'Unknown';
-    final String returnStatus = json['return_status'];
+    final String requestStatus = (json['request_status'] ?? 'Unknown').toString();
+    final String returnStatus = (json['return_status'] ?? '').toString();
+    final String returnedBy = (json['staff_name'] ?? '-').toString();
 
     String finalStatus;
-    String returnedBy = json['staff_name'] ?? '-';
-
     if (returnStatus == 'Returned') {
       finalStatus = 'Returned';
     } else if (requestStatus == 'Approved' && returnStatus == 'Not Returned') {
       finalStatus = 'Borrowed';
     } else if (requestStatus == 'Approved' &&
-        returnStatus == 'Requested Return') {
+        returnStatus.toLowerCase().contains('request')) {
+      // more tolerant match for 'Requested Return' variants
       finalStatus = 'Request Return';
     } else if (requestStatus == 'Rejected') {
       finalStatus = 'Rejected';
@@ -444,11 +480,11 @@ class HistoryItem {
     final String requestId = (json['request_id'] ?? '').toString();
 
     return HistoryItem(
-      item: json['asset_name'] ?? 'Unknown Item',
+      item: (json['asset_name'] ?? 'Unknown Item').toString(),
       dateRange: dateRange,
-      borrower: json['borrower_name'] ?? '-',
+      borrower: (json['borrower_name'] ?? '-').toString(),
       staff: returnedBy,
-      lender: json['lender_name'] ?? '-',
+      lender: (json['lender_name'] ?? '-').toString(),
       status: finalStatus,
       requestId: requestId.isEmpty ? '-' : requestId,
     );
