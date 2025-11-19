@@ -15,7 +15,7 @@ class MenuLenderPage extends StatefulWidget {
 class _MenuLenderPageState extends State<MenuLenderPage> {
   Future<Map<String, String>> _getAuthHeader() async {
     final storage = FlutterSecureStorage();
-    String? token = await storage.read(key: 'token');
+    final token = await storage.read(key: 'token');
     return token != null ? {'Authorization': 'Bearer $token'} : {};
   }
   // Use _getAuthHeader() when making API requests, e.g.:
@@ -38,7 +38,7 @@ class _MenuLenderPageState extends State<MenuLenderPage> {
               controller: reasonController,
               maxLines: 2,
               decoration: InputDecoration(
-                hintText: "Reason...",
+                hintText: "Need to fill the Reason...",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

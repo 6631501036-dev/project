@@ -27,7 +27,7 @@ class _LoginState extends State<Login> {
   Future<void> _login() async {
     setState(() {
       _isLoading = true;
-      // debugPrint('Server URL: $url');
+      debugPrint('Server URL: $url');
     });
 
     try {
