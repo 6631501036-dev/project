@@ -66,31 +66,20 @@ class _MenuStaffState extends State<MenuStaff> {
       case 1:
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) =>
-                Request(staffId: widget.staffId, username: widget.username),
-          ),
+          MaterialPageRoute(builder: (context) => Request()),
         );
 
         break;
       case 2:
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) =>
-                Staff(staffId: widget.staffId, username: widget.username),
-          ),
+          MaterialPageRoute(builder: (context) => Staff()),
         );
         break;
       case 3:
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => StaffHistory(
-              staffId: widget.staffId,
-              username: widget.username,
-            ),
-          ),
+          MaterialPageRoute(builder: (context) => StaffHistory()),
         );
         break;
       case 4:

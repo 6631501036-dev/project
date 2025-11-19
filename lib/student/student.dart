@@ -111,15 +111,25 @@ class _StudentState extends State<Student> with RouteAware {
           .timeout(const Duration(seconds: 10));
 
       if (statusResponse.statusCode == 200) {
-        final statusData = jsonDecode(statusResponse.body);
+        //final statusData = jsonDecode(statusResponse.body);
+        final dynamic decodedBody = jsonDecode(statusResponse.body);
+        final Map<String, dynamic>? statusData = decodedBody is Map
+            ? decodedBody as Map<String, dynamic>
+            : null;
         setState(() {
-          canBorrowToday = statusData['can_borrow_today'] ?? 0;
-          final String assetStatus = statusData['asset_status'] ?? '';
-          _activeStatusItem =
-              (assetStatus == 'Pending' || assetStatus == 'Borrowed') &&
-                  statusData['return_status'] != 'Returned'
-              ? statusData
-              : null;
+          if (statusData != null) {
+            canBorrowToday = statusData['can_borrow_today'] ?? 0;
+            final String assetStatus = statusData['asset_status'] ?? '';
+            _activeStatusItem =
+                (assetStatus == 'Pending' || assetStatus == 'Borrowed') &&
+                    statusData['return_status'] != 'Returned'
+                ? statusData
+                : null;
+          } else {
+            // กำหนดค่าเริ่มต้นเมื่อไม่มี Request History เลย
+            canBorrowToday = 1;
+            _activeStatusItem = null;
+          }
         });
       }
 
@@ -565,6 +575,10 @@ class _StudentState extends State<Student> with RouteAware {
                             enableBorrow = false;
                           } else if (assetStatus == 'Disabled') {
                             displayStatus = 'Disabled';
+                            statusColor = Colors.red;
+                            enableBorrow = false;
+                          } else if (assetStatus == 'Rejected') {
+                            displayStatus = 'Rejected';
                             statusColor = Colors.red;
                             enableBorrow = false;
                           } else {
