@@ -98,7 +98,13 @@ class _RequestState extends State<Request> {
     }
 
     try {
-      final res = await http.get(Uri.parse('$baseUrl/staff/request/$staffId'));
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
+      final res = await http.get(
+        Uri.parse('$baseUrl/staff/request/$staffId'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -131,9 +137,12 @@ class _RequestState extends State<Request> {
     setState(() => isLoading = true);
 
     try {
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
       final res = await http.put(
         Uri.parse("$baseUrl/staff/returnAsset/$requestId"),
-        headers: {"Content-Type": "application/json"},
+        headers: {"Authorization": "Bearer $token"},
         body: jsonEncode({"staff_id": staffId}),
       );
 
@@ -178,7 +187,13 @@ class _RequestState extends State<Request> {
 
   // แจ้งเตือน
   Future<void> fetchNotificationCount() async {
-    final res = await http.get(Uri.parse("$baseUrl/api/returnCount"));
+    final storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'token');
+
+    final res = await http.get(
+      Uri.parse("$baseUrl/api/returnCount"),
+      headers: {"Authorization": "Bearer $token"},
+    );
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
       setState(() {
@@ -525,8 +540,11 @@ class _RequestState extends State<Request> {
         onTap: () async {
           _onItemTapped(index);
           if (index == 1) {
+            final storage = FlutterSecureStorage();
+            final token = await storage.read(key: 'token');
             await http.delete(
               Uri.parse("$baseUrl/api/clearReturnNotifications"),
+              headers: {"Authorization": "Bearer $token"},
             );
             setState(() => _notificationCount = 0);
           }
