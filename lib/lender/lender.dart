@@ -285,31 +285,49 @@ class _LenderState extends State<Lender> {
 
     final url = '$baseUrl/lender/borrowingRequest/$requestId/$action';
 
-    final body = json.encode({
+    final body = {
       "lender_id": _lenderId.toString(),
       if (reason != null) 'reason': reason,
-    });
+    };
 
     try {
+      // อ่าน token จาก storage แล้วแนบเป็น Authorization header
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
       final response = await http.put(
         Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
+        headers: headers,
+        body: json.encode(body),
       );
 
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Action '$action' successful."),
+          const SnackBar(
+            content: Text("Action successful."),
             backgroundColor: Colors.green,
           ),
         );
+      } else if (response.statusCode == 401) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Unauthorized. Token missing or expired."),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        // optional: force logout / prompt re-login
       } else {
+        final msg = (response.body.isNotEmpty)
+            ? json.decode(response.body)['message'] ?? response.body
+            : 'Unknown error';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              "Failed: ${json.decode(response.body)['message'] ?? response.body}",
-            ),
+            content: Text("Failed: $msg"),
             backgroundColor: Colors.redAccent,
           ),
         );

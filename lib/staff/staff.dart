@@ -62,6 +62,39 @@ class _StaffState extends State<Staff> {
   int borrowedCount = 0;
   int disabledCount = 0;
 
+Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Confirm Logout"),
+        content: const Text("Are you sure you want to log out?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+          final storage = FlutterSecureStorage();
+          await storage.delete(key: 'token');
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
+    }
+  }
+
+
+
   @override
   void initState() {
     super.initState();
@@ -318,7 +351,9 @@ class _StaffState extends State<Staff> {
                   ),
                 ),
                 onPressed: () {
-                  Navigator.pop(context);
+                  // ปิดทุก dialog (popup) ที่ซ้อนอยู่ แล้วเรียก onApply
+                  Navigator.of(context, rootNavigator: true)
+                      .popUntil((route) => route is! PopupRoute);
                   onApply?.call();
                 },
                 child: const Text("Close"),
@@ -422,11 +457,7 @@ class _StaffState extends State<Staff> {
         );
         break;
       case 3:
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const Login()),
-          (route) => false,
-        );
+        _logout();
         break;
     }
   }
