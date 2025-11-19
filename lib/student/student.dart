@@ -335,7 +335,7 @@ class _StudentState extends State<Student> with RouteAware {
     }
   }
 
-  final String imageBaseUrl = "http://192.168.0.52:3000";
+  final String imageBaseUrl = "http://$defaultIp:$defaultPort";
   String buildImageUrl(String? imageField) {
     if (imageField == null || imageField.isEmpty) {
       return "$imageBaseUrl/public/image/default.jpg";
