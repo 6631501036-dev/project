@@ -178,21 +178,25 @@ class _Student_statusState extends State<Student_status> {
   }
 
   Widget _buildBodyContent() {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(30.0),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 24.0),
-              _buildStatusSection(item: _currentItem),
-              const SizedBox(height: 24.0),
-            ],
+    return RefreshIndicator(
+      // ⭐️ เพิ่ม RefreshIndicator
+      onRefresh: _loadUserAndFetchData, // ให้เรียกโหลดข้อมูลใหม่เมื่อมีการดึง
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30.0),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 24.0),
+                _buildStatusSection(item: _currentItem),
+                const SizedBox(height: 24.0),
+              ],
+            ),
           ),
         ),
       ),
@@ -243,8 +247,6 @@ class _Student_statusState extends State<Student_status> {
       );
     }
 
-    // ...
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
@@ -273,6 +275,7 @@ class _Student_statusState extends State<Student_status> {
     if (s == 'Pending') return Colors.orange;
     if (s == 'Requested Return') return Colors.purple;
     if (s == 'Borrowed') return Colors.teal;
+    if (s == 'Rejected') return Colors.red;
     return Colors.black;
   }
 }

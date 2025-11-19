@@ -20,7 +20,7 @@ class _LoginState extends State<Login> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   // URL ของเซิร์ฟเวอร์ สามาเปลี่ยนได้***********************************************************อย่าลืมเปลี่ยนนะ************************************
-  final url = '192.168.110.142:3000';
+  final url = '192.168.234.1:3000';
   bool _isLoading = false; // เผื่อไว้แสดงสถานะโหลดตอนกด Log in
 
   Future<void> _login() async {
@@ -67,14 +67,9 @@ class _LoginState extends State<Login> {
             );
             break;
           case 'staff':
-            int staffId = payload['user_id']; // ✅ ดึงจาก payload ของ JWT
-            String username = payload['username'];
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    Staff(staffId: staffId, username: username),
-              ),
+              MaterialPageRoute(builder: (context) => const Staff()),
             );
             break;
           case 'lender':

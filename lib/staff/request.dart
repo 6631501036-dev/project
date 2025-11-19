@@ -1,119 +1,183 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_application_1/staff/menu_staff.dart';
 import 'package:flutter_application_1/staff/staff.dart';
 import 'package:flutter_application_1/staff/staff_history.dart';
 import 'package:flutter_application_1/login/login.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:async';
 
 class Request extends StatefulWidget {
-  final int staffId;
-  final String username;
-
-  const Request({super.key, required this.staffId, required this.username});
+  // final int staffId;
+  // final String username;
+  const Request({super.key});
 
   @override
   State<Request> createState() => _RequestState();
 }
 
 class _RequestState extends State<Request> {
+  int? staffId;
+  String? username;
   List requests = [];
   bool isLoading = true;
   bool isError = false;
   int _hoverIndex = -1;
-  int _selectedIndex = 1;
+  int _selectedIndex = 0;
   int _notificationCount = 0; // สำหรับนับจำนวนแจ้งเตือน return
+  final String baseUrl = "http://192.168.234.1:3000";
 
-  // โหลดข้อมูล request จาก server
-  Future<void> fetchRequests() async {
-    try {
-      final res = await http.get(
-        Uri.parse("http://192.168.110.142:3000/staff/request/${widget.staffId}"),
-      );
+  // ========== ดึง user_id จาก token ==========
+  Future<void> _loadUserAndFetch() async {
+    final storage = FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
+    int? userId;
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        if (data["success"] == true) {
+    if (token != null) {
+      try {
+        final jwt = JWT.decode(token);
+        Map payload = jwt.payload;
+        userId = payload['user_id'] as int;
+        String fetchedUsername = payload['username'] ?? 'Staff';
+
+        if (mounted) {
           setState(() {
-            requests = data["requests"];
-            isLoading = false;
-            isError = false;
-          });
-        } else {
-          setState(() {
-            isError = true;
-            isLoading = false;
+            staffId = userId;
+            username = fetchedUsername; // ใช้ username จาก token เลย
           });
         }
-      } else {
-        setState(() {
-          isError = true;
-          isLoading = false;
-        });
+      } catch (e) {
+        print("Token decoding error: $e");
+        userId = null;
       }
+    }
+
+    if (userId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please login again.")));
+      if (mounted) setState(() => isLoading = false);
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
+      return;
+    }
+
+    // โหลดข้อมูลหลัก
+    try {
+      await fetchRequests();
+      await fetchNotificationCount();
     } catch (e) {
-      debugPrint("❌ Fetch error: $e");
-      setState(() {
-        isLoading = false;
-        isError = true;
-      });
+      print("Error fetching initial data: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Network error during initial load.")),
+        );
+      }
+      setState(() => isError = true);
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
-  // ✅ ฟังก์ชันคืนของ (PUT)
-  // request.dart (ในฟังก์ชัน Future<void> returnAsset(int requestId))
+  // โหลดข้อมูล request จาก server
+  Future<void> fetchRequests() async {
+    if (staffId == null) return;
+
+    if (mounted) {
+      // ตั้งค่า isLoading เป็น true เพื่อแสดงโหลดเฉพาะตอน fetchRequests
+      setState(() {
+        isLoading = true;
+        requests = [];
+      });
+    }
+
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/staff/request/$staffId'));
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        if (mounted) {
+          setState(() {
+            requests = data['requests'] ?? [];
+            isError = false;
+          });
+        }
+      } else {
+        throw Exception('Failed to load requests: ${res.statusCode}');
+      }
+    } catch (e) {
+      // ... Error handling ...
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  // ✅ ฟังก์ชันคืนของ (PUT) คืนของ
   Future<void> returnAsset(int requestId) async {
+    if (staffId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("User ID not found. Please re-login.")),
+      );
+      return;
+    }
+    // แสดง loading
+    setState(() => isLoading = true);
+
     try {
       final res = await http.put(
-        Uri.parse("http://192.168.110.142:3000/staff/returnAsset/$requestId"),
+        Uri.parse("$baseUrl/staff/returnAsset/$requestId"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"staff_id": widget.staffId}),
+        body: jsonEncode({"staff_id": staffId}),
       );
 
       if (res.statusCode == 200) {
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text("✅ คืนอุปกรณ์สำเร็จ")));
 
-        // ✅ ลบแถวที่คืนแล้วออกจาก requests ใน UI
+        // ✅ ลบแถวเฉพาะ UI
         setState(() {
           requests.removeWhere((r) => r['id'] == requestId);
+
+          // ลด badge แจ้งเตือนถ้าจำนวนมากกว่า 0
+          if (_notificationCount > 0) _notificationCount--;
         });
 
-        // ✅ โหลด count แจ้งเตือนใหม่
-        fetchNotificationCount();
+        // ไม่ต้อง fetchRequests() ใหม่ ไม่กระทบ database
       } else {
         String errorMessage = 'เกิดข้อผิดพลาดในการคืนอุปกรณ์';
         try {
           final errorBody = json.decode(res.body);
-          errorMessage =
-              errorBody['message'] ??
-              'ข้อผิดพลาดไม่ทราบสาเหตุ (Status: ${res.statusCode})';
-        } catch (e) {
-          errorMessage = res.body.isNotEmpty
-              ? res.body
-              : 'Server Error (Status: ${res.statusCode})';
-        }
+          errorMessage = errorBody['message'] ?? errorMessage;
+        } catch (_) {}
 
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("❌ คืนอุปกรณ์ไม่สำเร็จ: $errorMessage")),
         );
       }
     } catch (e) {
-      debugPrint("Error PUT returnAsset: $e");
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์"),
         ),
       );
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
   // แจ้งเตือน
   Future<void> fetchNotificationCount() async {
-    final res = await http.get(
-      Uri.parse("http://192.168.110.142:3000/api/returnCount"),
-    );
+    final res = await http.get(Uri.parse("$baseUrl/api/returnCount"));
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
       setState(() {
@@ -127,6 +191,7 @@ class _RequestState extends State<Request> {
     super.initState();
     fetchRequests(); // โหลด request return
     fetchNotificationCount(); // ✅ โหลดจำนวนแจ้งเตือนเมื่อเปิดหน้า
+    _loadUserAndFetch();
   }
 
   // ✅ ฟังก์ชันเปลี่ยนหน้า
@@ -134,37 +199,20 @@ class _RequestState extends State<Request> {
     setState(() => _selectedIndex = i);
     switch (i) {
       case 0:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                MenuStaff(staffId: widget.staffId, username: widget.username),
-          ),
-        );
         break;
       case 1:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => Staff()),
+        );
         break;
       case 2:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) =>
-                Staff(staffId: widget.staffId, username: widget.username),
-          ),
+          MaterialPageRoute(builder: (_) => StaffHistory()),
         );
         break;
       case 3:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StaffHistory(
-              staffId: widget.staffId,
-              username: widget.username,
-            ),
-          ),
-        );
-        break;
-      case 4:
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const Login()),
@@ -210,7 +258,7 @@ class _RequestState extends State<Request> {
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      height: 150,
+      height: 175,
       color: Colors.lightBlue[100],
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -222,8 +270,12 @@ class _RequestState extends State<Request> {
           ),
           const SizedBox(height: 8),
           Text(
-            "${widget.username} (Staff)",
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            '$username',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            "(Staff)",
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
           ),
         ],
       ),
@@ -445,11 +497,10 @@ class _RequestState extends State<Request> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem(0, Icons.sports_soccer, "Menu"),
-          _buildNavItem(1, Icons.refresh, "Return"),
-          _buildNavItem(2, Icons.add_circle_outline, "Add", largeIcon: true),
-          _buildNavItem(3, Icons.history, "History"),
-          _buildNavItem(4, Icons.logout, "Logout"),
+          _buildNavItem(0, Icons.refresh, "Return"),
+          _buildNavItem(1, Icons.home, "Staff"),
+          _buildNavItem(2, Icons.history, "History"),
+          _buildNavItem(3, Icons.logout, "Logout"),
         ],
       ),
     );
@@ -463,7 +514,7 @@ class _RequestState extends State<Request> {
   }) {
     final bool isSelected = _selectedIndex == index;
     final bool hasNotification =
-        index == 1 && _notificationCount > 0; // ปุ่ม Return เท่านั้น
+        index == 0 && _notificationCount > 0; // ปุ่ม Return เท่านั้น
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hoverIndex = index),
@@ -474,9 +525,7 @@ class _RequestState extends State<Request> {
           _onItemTapped(index);
           if (index == 1) {
             await http.delete(
-              Uri.parse(
-                "http://192.168.110.142:3000/api/clearReturnNotifications",
-              ),
+              Uri.parse("$baseUrl/api/clearReturnNotifications"),
             );
             setState(() => _notificationCount = 0);
           }

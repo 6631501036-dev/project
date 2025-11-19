@@ -4,33 +4,24 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
-import 'package:flutter_application_1/staff/menu_staff.dart';
 import 'package:flutter_application_1/staff/request.dart';
 import 'package:flutter_application_1/staff/staff.dart';
-import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 class StaffHistory extends StatefulWidget {
-  final int staffId;
-  final String username;
-
-  const StaffHistory({
-    super.key,
-    required this.staffId,
-    required this.username,
-  });
+  const StaffHistory({super.key});
 
   @override
   State<StaffHistory> createState() => _StaffHistoryState();
 }
 
 class _StaffHistoryState extends State<StaffHistory> {
-  int _selectedIndex = 3;
-  
-  final String baseUrl = "http://192.168.110.142:3000/api";
-  int? userId;
-
+  final String baseUrl = "http://192.168.234.1:3000/api";
+  int? staffId;
+  String? username;
   bool _isLoading = true;
+  int _selectedIndex = 2;
   List<HistoryItem> _historyItems = [];
 
   @override
@@ -45,11 +36,11 @@ class _StaffHistoryState extends State<StaffHistory> {
     String? token = await storage.read(key: 'token');
 
     final jwt = JWT.decode(token!);
-    Map payload = jwt.payload;
+    Map playload = jwt.payload;
 
-    userId = payload['user_id'] as int;
+    staffId = playload['user_id'] as int;
 
-    if (userId == null) {
+    if (staffId == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -61,6 +52,7 @@ class _StaffHistoryState extends State<StaffHistory> {
   }
 
   Future<void> _fetchData() async {
+    if (staffId == null) return;
     setState(() {
       _isLoading = true;
       _historyItems = [];
@@ -75,7 +67,9 @@ class _StaffHistoryState extends State<StaffHistory> {
         setState(() {
           _historyItems = data
               .map((jsonItem) => HistoryItem.fromJson(jsonItem))
-              .toList();
+              .toList()
+              .reversed
+              .toList(); // ทำให้ล่าสุดอยู่บน
         });
       } else {
         if (mounted) {
@@ -102,33 +96,20 @@ class _StaffHistoryState extends State<StaffHistory> {
     setState(() => _selectedIndex = index);
     switch (index) {
       case 0:
-        Navigator.push(
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) =>
-                MenuStaff(staffId: widget.staffId, username: widget.username),
-          ),
+          MaterialPageRoute(builder: (context) => Request()),
         );
         break;
       case 1:
-        Navigator.push(
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) =>
-                Request(staffId: widget.staffId, username: widget.username),
-          ),
+          MaterialPageRoute(builder: (context) => Staff()),
         );
         break;
       case 2:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                Staff(staffId: widget.staffId, username: widget.username),
-          ),
-        );
         break;
-      case 4:
+      case 3:
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const Login()),
@@ -152,12 +133,7 @@ class _StaffHistoryState extends State<StaffHistory> {
       appBar: AppBar(
         backgroundColor: Colors.blue.shade100,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
-          onPressed: () {
-            if (Navigator.canPop(context)) Navigator.pop(context);
-          },
-        ),
+
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.black),
@@ -234,7 +210,8 @@ class _StaffHistoryState extends State<StaffHistory> {
               itemBuilder: (context, index) {
                 return _buildHistoryCard(item: items[index]);
               },
-              separatorBuilder: (context, index) => const SizedBox(height: 12.0),
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: 12.0),
             ),
         ],
       ),
@@ -243,9 +220,21 @@ class _StaffHistoryState extends State<StaffHistory> {
 
   Widget _buildHistoryCard({required HistoryItem item}) {
     Color getStatusColor(String status) {
-      if (status == 'Returned') return Colors.green;
-      if (status == 'Rejected') return Colors.red;
-      return Colors.grey;
+      switch (status) {
+        case 'Pending':
+          return Colors.orange;
+        case 'Rejected':
+        case 'Disable':
+          return Colors.red;
+        case 'Request Return':
+          return Colors.purple;
+        case 'Borrowed':
+          return Colors.blue;
+        case 'Returned':
+          return Colors.deepPurpleAccent;
+        default:
+          return Colors.grey;
+      }
     }
 
     return Container(
@@ -272,7 +261,7 @@ class _StaffHistoryState extends State<StaffHistory> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                 'Request ID #${item.requestId}',
+                  'Request ID #${item.requestId}',
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
@@ -314,13 +303,22 @@ class _StaffHistoryState extends State<StaffHistory> {
                 item.borrower,
                 style: const TextStyle(color: Colors.black, fontSize: 14),
               ),
+              Text(
+                'Lender',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              Text(
+                item.lender,
+                style: const TextStyle(color: Colors.black, fontSize: 14),
+              ),
               const SizedBox(height: 8),
               Text(
                 'Returned',
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
+
               Text(
-                item.returnedBy,
+                item.staff,
                 style: const TextStyle(color: Colors.black, fontSize: 14),
               ),
             ],
@@ -346,11 +344,10 @@ class _StaffHistoryState extends State<StaffHistory> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem(0, Icons.sports_soccer, "Menu"),
-          _buildNavItem(1, Icons.refresh, "Return"),
-          _buildNavItem(2, Icons.home, "Staff", largeIcon: true),
-          _buildNavItem(3, Icons.history, "History"),
-          _buildNavItem(4, Icons.logout, "Logout"),
+          _buildNavItem(0, Icons.refresh, "Return"),
+          _buildNavItem(1, Icons.home, "Staff"),
+          _buildNavItem(2, Icons.history, "History"),
+          _buildNavItem(3, Icons.logout, "Logout"),
         ],
       ),
     );
@@ -394,7 +391,8 @@ class HistoryItem {
   final String item;
   final String dateRange;
   final String borrower;
-  final String returnedBy;
+  final String staff;
+  final String lender;
   final String status;
   final String requestId;
 
@@ -402,7 +400,8 @@ class HistoryItem {
     required this.item,
     required this.dateRange,
     required this.borrower,
-    required this.returnedBy,
+    required this.staff,
+    required this.lender,
     required this.status,
     required this.requestId,
   });
@@ -423,14 +422,33 @@ class HistoryItem {
         "${formatDate(json['borrow_date'])} To ${formatDate(json['return_date'])}";
 
     final String requestStatus = json['request_status'] ?? 'Unknown';
+    final String returnStatus = json['return_status'];
+
+    String finalStatus;
+    String returnedBy = json['staff_name'] ?? '-';
+
+    if (returnStatus == 'Returned') {
+      finalStatus = 'Returned';
+    } else if (requestStatus == 'Approved' && returnStatus == 'Not Returned') {
+      finalStatus = 'Borrowed';
+    } else if (requestStatus == 'Approved' &&
+        returnStatus == 'Requested Return') {
+      finalStatus = 'Request Return';
+    } else if (requestStatus == 'Rejected') {
+      finalStatus = 'Rejected';
+    } else {
+      finalStatus = requestStatus;
+    }
+
     final String requestId = (json['request_id'] ?? '').toString();
 
     return HistoryItem(
       item: json['asset_name'] ?? 'Unknown Item',
       dateRange: dateRange,
       borrower: json['borrower_name'] ?? '-',
-      returnedBy: json['staff_name'] ?? '-',
-      status: requestStatus,
+      staff: returnedBy,
+      lender: json['lender_name'] ?? '-',
+      status: finalStatus,
       requestId: requestId.isEmpty ? '-' : requestId,
     );
   }

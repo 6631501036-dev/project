@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/staff/request.dart';
 import 'package:flutter_application_1/staff/staff_history.dart';
-import 'package:flutter_application_1/staff/menu_staff.dart';
 import 'package:flutter_application_1/login/login.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 // Class สำหรับข้อมูลสินทรัพย์
 class Product {
@@ -29,21 +29,26 @@ class Product {
 }
 
 class Staff extends StatefulWidget {
-  final int staffId;
-  final String username;
+  // final int staffId;
+  // final String username;
 
-  const Staff({super.key, required this.staffId, required this.username});
+  //const Staff({super.key, required this.staffId, required this.username});
+  const Staff({super.key});
 
   @override
   State<Staff> createState() => _StaffState();
 }
 
 class _StaffState extends State<Staff> {
-  int _selectedIndex = 2;
+  int? staffId;
+  String? username;
+  bool _loading = true;
+  int _selectedIndex = 1;
   int _hoverIndex = -1;
   int notificationCount = 0; // เพิ่มตัวแปรแจ้งเตือน
   List<Product> _products = [];
   List<Product> _filteredProducts = [];
+  final String baseUrl = "http://192.168.234.1:3000";
 
   // Search
   final TextEditingController _searchController = TextEditingController();
@@ -59,6 +64,7 @@ class _StaffState extends State<Staff> {
   @override
   void initState() {
     super.initState();
+    _initStaffData();
     _fetchAssets();
 
     _searchController.addListener(() {
@@ -88,13 +94,48 @@ class _StaffState extends State<Staff> {
     }
   }
 
+  // โหลดข้อมูล staff JWT
+  Future<void> _initStaffData() async {
+    try {
+      final storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'token');
+
+      if (token == null) {
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const Login()),
+            (route) => false,
+          );
+        }
+        return;
+      }
+
+      final jwt = JWT.decode(token);
+      final payload = jwt.payload;
+
+      setState(() {
+        staffId = payload['user_id'];
+        username = payload['username'];
+      });
+
+      await _fetchAssets();
+      await _fetchDashboardData();
+      await _fetchNotifications();
+    } catch (e) {
+      print("❌ Error decoding token: $e");
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
   // โหลดข้อมูลสินทรัพย์จากฐานข้อมูล
   Future<void> _fetchAssets() async {
     try {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      final url = Uri.parse("http://192.168.110.142:3000/assets");
+      final url = Uri.parse('$baseUrl/assets');
       final response = await http.get(
         url,
         headers: {'Authorization': 'Bearer $token'},
@@ -110,7 +151,7 @@ class _StaffState extends State<Staff> {
                   id: item['asset_id'].toString(),
                   name: item['asset_name'],
                   imagePath:
-                      "http://192.168.110.142:3000${item['image'] ?? '/public/image/default.jpg'}",
+                      "$baseUrl${item['image'] ?? '/public/image/default.jpg'}",
                   status: item['asset_status'],
                   statusColor: _getStatusColor(item['asset_status']),
                 ),
@@ -125,6 +166,7 @@ class _StaffState extends State<Staff> {
           pendingCount = _products.where((p) => p.status == "Pending").length;
           borrowedCount = _products.where((p) => p.status == "Borrowed").length;
           disabledCount = _products.where((p) => p.status == "Disabled").length;
+          _filterProducts();
         });
         print("Assets loaded: ${_products.length}");
       } else {
@@ -154,7 +196,7 @@ class _StaffState extends State<Staff> {
   // เพิ่มสินทรัพย์ใหม่
   Future<void> addAsset(String name, String description, [File? image]) async {
     try {
-      final uri = Uri.parse('http://192.168.110.142:3000/staff/addAsset');
+      final uri = Uri.parse('$baseUrl/staff/addAsset');
       var request = http.MultipartRequest('POST', uri);
       request.fields['name'] = name;
       request.fields['description'] = description;
@@ -184,7 +226,7 @@ class _StaffState extends State<Staff> {
     try {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
-      final uri = Uri.parse('http://192.168.110.142:3000/staff/editAsset/$id');
+      final uri = Uri.parse('$baseUrl/staff/editAsset/$id');
       var request = http.MultipartRequest('PUT', uri);
       request.headers['Authorization'] = 'Bearer $token';
       request.fields['name'] = name;
@@ -289,9 +331,7 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
       final endpoint = currentStatus == "Disabled" ? "enable" : "disable";
-      final url = Uri.parse(
-        "http://192.168.110.142:3000/staff/editAsset/$assetId/$endpoint",
-      );
+      final url = Uri.parse("$baseUrl/staff/editAsset/$assetId/$endpoint");
 
       final response = await http.put(
         url,
@@ -340,7 +380,7 @@ class _StaffState extends State<Staff> {
       try {
         final storage = FlutterSecureStorage();
         final token = await storage.read(key: 'token');
-        final url = Uri.parse("http://192.168.110.142:3000/staff/deleteAsset/$id");
+        final url = Uri.parse("$baseUrl/staff/deleteAsset/$id");
         final response = await http.delete(
           url,
           headers: {'Authorization': 'Bearer $token'},
@@ -360,50 +400,23 @@ class _StaffState extends State<Staff> {
     setState(() => _selectedIndex = i);
     switch (i) {
       case 0:
-        Navigator.push(
+        _clearReturnNotifications(); // ล้างแจ้งเตือนก่อนเปิดหน้า
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) =>
-                MenuStaff(staffId: widget.staffId, username: widget.username),
-          ),
+          MaterialPageRoute(builder: (_) => Request()),
         );
         break;
       case 1:
-        _clearReturnNotifications(); // ล้างแจ้งเตือนก่อนเปิดหน้า
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                Request(staffId: widget.staffId, username: widget.username),
-          ),
-        );
+        _fetchAssets();
+        _fetchDashboardData();
         break;
       case 2:
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            content: _ProductFormDialog(
-              title: "Add Asset",
-              initialProductName: "",
-              id: "",
-              onAddAsset: (name, _, image) =>
-                  addAsset(name, "Sport Equipment", image),
-            ),
-          ),
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => StaffHistory()),
         );
         break;
       case 3:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StaffHistory(
-              staffId: widget.staffId,
-              username: widget.username,
-            ),
-          ),
-        );
-        break;
-      case 4:
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const Login()),
@@ -428,16 +441,14 @@ class _StaffState extends State<Staff> {
     );
   }
 
-  // ✅ Dashboard Data API
+  // Dashboard Data API
   Future<void> _fetchDashboardData() async {
     try {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
       // ✅ แก้ URL ให้ถูก
-      final url = Uri.parse(
-        'http://192.168.110.142:3000/staff/dashboard/${widget.staffId}',
-      );
+      final url = Uri.parse('$baseUrl/staff/dashboard/$staffId');
       final response = await http.get(
         url,
         headers: {'Authorization': 'Bearer $token'},
@@ -473,7 +484,7 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      final url = Uri.parse("http://192.168.110.142:3000/api/returnCount");
+      final url = Uri.parse("$baseUrl/api/returnCount");
       final response = await http.get(
         url,
         headers: {
@@ -500,9 +511,7 @@ class _StaffState extends State<Staff> {
       final storage = FlutterSecureStorage();
       final token = await storage.read(key: 'token');
 
-      final url = Uri.parse(
-        "http://192.168.110.142:3000/api/clearReturnNotifications",
-      );
+      final url = Uri.parse("$baseUrl/api/clearReturnNotifications");
       final response = await http.delete(
         url,
         headers: {'Authorization': 'Bearer $token'},
@@ -526,6 +535,25 @@ class _StaffState extends State<Staff> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.black,
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              content: _ProductFormDialog(
+                title: "Add Asset",
+                initialProductName: "",
+                id: "",
+                onAddAsset: (name, _, image) =>
+                    addAsset(name, "Sport Equipment", image),
+              ),
+            ),
+          );
+        },
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+
       bottomNavigationBar: _buildBottomNavBar(),
       body: SafeArea(
         child: RefreshIndicator(
@@ -535,7 +563,6 @@ class _StaffState extends State<Staff> {
             child: Column(
               children: [
                 _buildHeader(),
-
                 // Search Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -585,7 +612,7 @@ class _StaffState extends State<Staff> {
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      height: 200,
+      //height: 200,
       color: Colors.lightBlue[100],
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
@@ -598,7 +625,7 @@ class _StaffState extends State<Staff> {
           ),
           const SizedBox(height: 8),
           Text(
-            "${widget.username}",
+            "$username",
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const Text(
@@ -629,8 +656,8 @@ class _StaffState extends State<Staff> {
   // 🔹 ย้ายฟังก์ชัน statCard มาแยกออกไว้ใช้ใน Header
   Widget _buildStatCard(String label, int count, Color color) {
     return Container(
-      width: 80,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
+      width: 70,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(6),
@@ -647,7 +674,7 @@ class _StaffState extends State<Staff> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             decoration: BoxDecoration(
               color: color,
               borderRadius: const BorderRadius.only(
@@ -661,20 +688,20 @@ class _StaffState extends State<Staff> {
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
-                fontSize: 13,
+                fontSize: 11,
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             count.toString(),
             style: const TextStyle(
-              fontSize: 32,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
               color: Colors.black,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -766,11 +793,10 @@ class _StaffState extends State<Staff> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem(0, Icons.sports_soccer, "Menu"),
-          _buildNavItem(1, Icons.refresh, "Return"),
-          _buildNavItem(2, Icons.add_circle_outline, "Add", largeIcon: true),
-          _buildNavItem(3, Icons.history, "History"),
-          _buildNavItem(4, Icons.logout, "Logout"),
+          _buildNavItem(0, Icons.refresh, "Return"),
+          _buildNavItem(1, Icons.home, "Home"),
+          _buildNavItem(2, Icons.history, "History"),
+          _buildNavItem(3, Icons.logout, "Logout"),
         ],
       ),
     );
@@ -785,7 +811,7 @@ class _StaffState extends State<Staff> {
     final bool isSelected = _selectedIndex == index;
 
     // ตรวจสอบถ้าเป็นไอคอน Notifications (สมมติว่า index 1)
-    bool showBadge = index == 1 && notificationCount > 0;
+    bool showBadge = index == 0 && notificationCount > 0;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hoverIndex = index),
@@ -907,20 +933,54 @@ class _ProductRow extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue.shade700,
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(80, 35),
+                  minimumSize: const Size(80, 25),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 4,
+                    horizontal: 8,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text("Edit", style: TextStyle(fontSize: 12)),
+                child: const Text("Edit", style: TextStyle(fontSize: 10)),
               ),
               const SizedBox(height: 6),
               ElevatedButton(
-                onPressed: () => onToggleDisable(id),
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text("${toggleButtonText} Asset"),
+                      content: Text(
+                        "Are you sure you want to ${toggleButtonText.toLowerCase()} this asset?",
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text("Cancel"),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          child: Text(
+                            toggleButtonText,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    onToggleDisable(id);
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: toggleButtonColor,
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(80, 35),
+                  minimumSize: const Size(80, 25),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 4,
+                    horizontal: 8,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -936,12 +996,16 @@ class _ProductRow extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey.shade700,
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(80, 35),
+                  minimumSize: const Size(80, 25),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 4,
+                    horizontal: 8,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text("Delete", style: TextStyle(fontSize: 12)),
+                child: const Text("Delete", style: TextStyle(fontSize: 10)),
               ),
             ],
           ),
@@ -1071,6 +1135,7 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
                   ),
                   child: const Text("Cancel"),
                 ),
+                const SizedBox(width: 10),
                 ElevatedButton(
                   onPressed: _handleSubmit,
                   style: ElevatedButton.styleFrom(

@@ -204,7 +204,8 @@ class _LenderhistoryState extends State<Lenderhistory> {
               itemBuilder: (context, index) {
                 return _buildHistoryCard(item: items[index]);
               },
-              separatorBuilder: (context, index) => const SizedBox(height: 12.0),
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: 12.0),
             ),
         ],
       ),
@@ -213,7 +214,7 @@ class _LenderhistoryState extends State<Lenderhistory> {
 
   Widget _buildHistoryCard({required HistoryItem item}) {
     Color getStatusColor(String status) {
-      if (status == 'Returned') return Colors.green;
+      if (status == 'Approved') return Colors.green;
       if (status == 'Rejected') return Colors.red;
       return Colors.grey;
     }

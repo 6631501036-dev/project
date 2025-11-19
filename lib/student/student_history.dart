@@ -219,7 +219,7 @@ class _Student_historyState extends State<Student_history> {
       switch (status) {
         case 'Pending':
           return Colors.orange;
-        case 'Rejected':
+        case 'Rejected' || 'Disable':
           return Colors.red;
         case 'Request Return':
           return Colors.purple;
