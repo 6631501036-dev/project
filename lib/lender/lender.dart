@@ -7,9 +7,10 @@ import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
 import 'menu_lender.dart';
+import 'package:flutter_application_1/config/config.dart';
 
-const String baseIp = "192.168.110.142:3000";
-const String baseUrl = "http://$baseIp";
+final String baseIp = "$defaultIp:$defaultPort";
+final String baseUrl = "http://$baseIp";
 
 class PendingRequest {
   final int requestId;
@@ -170,8 +171,12 @@ class _LenderState extends State<Lender> {
   // สร้างฟังก์ชันดึงสถิติ
   Future<void> _fetchAssetStats() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/lender/asset-stats'));
-
+      final storage = FlutterSecureStorage();
+      String? token = await storage.read(key: 'token');
+      final response = await http.get(
+        Uri.parse('$baseUrl/lender/asset-stats'),
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+      );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true && data['stats'] != null) {
@@ -198,8 +203,11 @@ class _LenderState extends State<Lender> {
   // (ฟังก์ชัน _loadData)
   Future<void> _loadData() async {
     try {
+      final storage = FlutterSecureStorage();
+      String? token = await storage.read(key: 'token');
       final response = await http.get(
         Uri.parse('$baseUrl/lender/pending-requests'),
+        headers: token != null ? {'Authorization': 'Bearer $token'} : {},
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

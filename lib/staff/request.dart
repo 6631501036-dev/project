@@ -7,6 +7,7 @@ import 'package:flutter_application_1/login/login.dart';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:async';
+import 'package:flutter_application_1/config/config.dart';
 
 class Request extends StatefulWidget {
   // final int staffId;
@@ -26,7 +27,7 @@ class _RequestState extends State<Request> {
   int _hoverIndex = -1;
   int _selectedIndex = 0;
   int _notificationCount = 0; // สำหรับนับจำนวนแจ้งเตือน return
-  final String baseUrl = "http://192.168.234.1:3000";
+  final String baseUrl = "http://$defaultIp:$defaultPort";
 
   // ========== ดึง user_id จาก token ==========
   Future<void> _loadUserAndFetch() async {

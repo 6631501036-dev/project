@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_application_1/config/config.dart';
 
 class Student_history extends StatefulWidget {
   const Student_history({super.key});
@@ -15,7 +16,7 @@ class Student_history extends StatefulWidget {
 }
 
 class _Student_historyState extends State<Student_history> {
-  final String baseUrl = "http://192.168.110.142:3000/api";
+  final String baseUrl = "http://$defaultIp:$defaultPort/api";
   int? userId;
 
   bool _isLoading = true;

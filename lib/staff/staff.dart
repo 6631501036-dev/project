@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:flutter_application_1/config/config.dart';
 
 // Class สำหรับข้อมูลสินทรัพย์
 class Product {
@@ -48,7 +49,7 @@ class _StaffState extends State<Staff> {
   int notificationCount = 0; // เพิ่มตัวแปรแจ้งเตือน
   List<Product> _products = [];
   List<Product> _filteredProducts = [];
-  final String baseUrl = "http://192.168.234.1:3000";
+  final String baseUrl = "http://$defaultIp:$defaultPort";
 
   // Search
   final TextEditingController _searchController = TextEditingController();

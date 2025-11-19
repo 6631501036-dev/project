@@ -7,6 +7,7 @@ import 'package:flutter_application_1/student/student.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:flutter_application_1/config/config.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -20,12 +21,13 @@ class _LoginState extends State<Login> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   // URL ของเซิร์ฟเวอร์ สามาเปลี่ยนได้***********************************************************อย่าลืมเปลี่ยนนะ************************************
-  final url = '192.168.234.1:3000';
+  final url = '$defaultIp:$defaultPort';
   bool _isLoading = false; // เผื่อไว้แสดงสถานะโหลดตอนกด Log in
 
   Future<void> _login() async {
     setState(() {
       _isLoading = true;
+      // debugPrint('Server URL: $url');
     });
 
     try {

@@ -7,6 +7,7 @@ import 'student_status.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_application_1/login/login.dart';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:flutter_application_1/config/config.dart';
 
 class Student extends StatefulWidget {
   const Student({super.key});
@@ -16,7 +17,7 @@ class Student extends StatefulWidget {
 }
 
 class _StudentState extends State<Student> with RouteAware {
-  final String baseApi = "http://192.168.110.142:3000/api";
+  final String baseApi = "http://$defaultIp:$defaultPort/api";
   int? borrowerId;
   List<Map<String, dynamic>> equipmentList = [];
   List<Map<String, dynamic>> _filteredList = [];
@@ -334,7 +335,7 @@ class _StudentState extends State<Student> with RouteAware {
     }
   }
 
-  final String imageBaseUrl = "http://192.168.110.142:3000";
+  final String imageBaseUrl = "http://192.168.0.52:3000";
   String buildImageUrl(String? imageField) {
     if (imageField == null || imageField.isEmpty) {
       return "$imageBaseUrl/public/image/default.jpg";
