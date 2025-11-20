@@ -381,9 +381,10 @@ class _LenderState extends State<Lender> {
                         ),
                       ),
                       const SizedBox(height: 8),
+
                       // เปลี่ยนจาก Nook → Sara
-                      const Text(
-                        "Sara (Lender)",
+                      Text(
+                        "${_lenderName ?? 'Lender'} (Lender)",
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

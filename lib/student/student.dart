@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -24,15 +25,21 @@ class _StudentState extends State<Student> with RouteAware {
   Map<String, dynamic>? _activeStatusItem;
   bool _loading = true;
   int canBorrowToday = 1;
+  int _notificationCount = 0; // จำนวนการแจ้งเตือน
+  Timer? _notificationTimer;
 
   // Search
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
-
+  Timer? _timer;
   @override
   void initState() {
     super.initState();
     fetchAssets();
+    fetchNotificationCount();
+    _notificationTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      fetchNotificationCount();
+    });
 
     _searchController.addListener(() {
       setState(() {
@@ -47,6 +54,8 @@ class _StudentState extends State<Student> with RouteAware {
     _searchController.dispose();
     routeObserver.unsubscribe(this);
     super.dispose();
+    _timer?.cancel();
+    _notificationTimer?.cancel();
   }
 
   void _filterEquipment() {
@@ -73,6 +82,7 @@ class _StudentState extends State<Student> with RouteAware {
   @override
   void didPopNext() {
     fetchAssets();
+    fetchNotificationCount(); // รีเฟรช badge หลังกลับจาก status/history
   }
 
   Future<void> fetchAssets() async {
@@ -304,6 +314,9 @@ class _StudentState extends State<Student> with RouteAware {
           context,
         ).showSnackBar(const SnackBar(content: Text("Return successful")));
         await fetchAssets();
+
+        // ดึงจำนวนแจ้งเตือนล่าสุดของ student (ถ้ามี)
+        await fetchNotificationCount();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Return failed: ${res.statusCode}")),
@@ -316,6 +329,40 @@ class _StudentState extends State<Student> with RouteAware {
         ).showSnackBar(const SnackBar(content: Text("Network error")));
       }
     }
+  }
+
+  // ✅ ฟังก์ชัน 1: ดึงจำนวนแจ้งเตือน
+  Future<void> fetchNotificationCount() async {
+    final storage = const FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
+    if (borrowerId == null || token == null) return;
+
+    final response = await http.get(
+      Uri.parse('$baseApi/student/notificationCount/$borrowerId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data['success'] == true) {
+        setState(() {
+          _notificationCount = int.tryParse(data['count'].toString()) ?? 0;
+        });
+      }
+    }
+  }
+
+  // ✅ ฟังก์ชัน 2: ล้างการแจ้งเตือน (เรียกเมื่อกดปุ่มกระดิ่ง)
+  Future<void> clearNotifications() async {
+    if (_notificationCount == 0) return;
+    final storage = const FlutterSecureStorage();
+    String? token = await storage.read(key: 'token');
+    if (borrowerId == null || token == null) return;
+
+    await http.delete(
+      Uri.parse('$baseApi/student/clearNotifications/$borrowerId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    setState(() => _notificationCount = 0);
   }
 
   Color getStatusColor(String status) {
@@ -437,21 +484,67 @@ class _StudentState extends State<Student> with RouteAware {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          ElevatedButton.icon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const Student_status(),
-                              ),
-                            ).then((_) => fetchAssets()),
-                            icon: const Icon(
-                              Icons.manage_search_rounded,
-                              color: Colors.black,
-                            ),
-                            label: const Text('Status'),
+                          ElevatedButton(
+                            onPressed: () async {
+                              // ล้าง badge เฉพาะเมื่อกดปุ่ม Status
+                              await clearNotifications(); // ฟังก์ชัน DELETE
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const Student_status(),
+                                ),
+                              );
+
+                              // รีเฟรช asset + badge หลังกลับจาก status
+                              await fetchAssets();
+                              await fetchNotificationCount();
+                            },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green.shade200,
                               foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                            ),
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                const Text(
+                                  'Status',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                                // Badge
+                                if (_notificationCount > 0)
+                                  Positioned(
+                                    right: -8,
+                                    top: -8,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(2),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 14,
+                                        minHeight: 14,
+                                      ),
+                                      child: Text(
+                                        '$_notificationCount',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 8),

@@ -62,7 +62,7 @@ class _StaffState extends State<Staff> {
   int borrowedCount = 0;
   int disabledCount = 0;
 
-Future<void> _logout() async {
+  Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -82,8 +82,8 @@ Future<void> _logout() async {
     );
 
     if (confirm == true) {
-          final storage = FlutterSecureStorage();
-          await storage.delete(key: 'token');
+      final storage = FlutterSecureStorage();
+      await storage.delete(key: 'token');
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -92,8 +92,6 @@ Future<void> _logout() async {
       );
     }
   }
-
-
 
   @override
   void initState() {
@@ -352,8 +350,10 @@ Future<void> _logout() async {
                 ),
                 onPressed: () {
                   // ปิดทุก dialog (popup) ที่ซ้อนอยู่ แล้วเรียก onApply
-                  Navigator.of(context, rootNavigator: true)
-                      .popUntil((route) => route is! PopupRoute);
+                  Navigator.of(
+                    context,
+                    rootNavigator: true,
+                  ).popUntil((route) => route is! PopupRoute);
                   onApply?.call();
                 },
                 child: const Text("Close"),
@@ -983,6 +983,44 @@ class _ProductRow extends StatelessWidget {
               const SizedBox(height: 6),
               ElevatedButton(
                 onPressed: () async {
+                  // ⚠️ ถ้าสถานะเป็น Borrowed → แสดง Warning สีเหลือง และยกเลิก
+                  if (status == "Borrowed") {
+                    await showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        backgroundColor: Colors.yellow.shade50,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        title: Row(
+                          children: const [
+                            Icon(Icons.warning, color: Colors.orange, size: 28),
+                            SizedBox(width: 10),
+                            Text(
+                              "Warning",
+                              style: TextStyle(color: Colors.orange),
+                            ),
+                          ],
+                        ),
+                        content: const Text(
+                          "This asset is currently Borrowed.\nYou cannot disable it now.",
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(
+                              "OK",
+                              style: TextStyle(color: Colors.orange),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    return; // ❌ หยุด ไม่ให้ Disable
+                  }
+
+                  // 🟦 ถ้าไม่ใช่ Borrowed → ทำงานปกติ
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (context) => AlertDialog(
@@ -1005,6 +1043,7 @@ class _ProductRow extends StatelessWidget {
                       ],
                     ),
                   );
+
                   if (confirm == true) {
                     onToggleDisable(id);
                   }

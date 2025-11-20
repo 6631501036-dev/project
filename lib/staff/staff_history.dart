@@ -52,7 +52,7 @@ class _StaffHistoryState extends State<StaffHistory> {
     await _fetchData();
   }
 
-// ...existing code...
+  // ...existing code...
   Future<void> _fetchData() async {
     if (staffId == null) return;
     setState(() {
@@ -75,7 +75,8 @@ class _StaffHistoryState extends State<StaffHistory> {
           try {
             String s = v.toString();
             // MySQL DATETIME often "YYYY-MM-DD HH:MM:SS" -> convert to ISO-like
-            if (s.contains(' ') && !s.contains('T')) s = s.replaceFirst(' ', 'T');
+            if (s.contains(' ') && !s.contains('T'))
+              s = s.replaceFirst(' ', 'T');
             return DateTime.parse(s).toLocal();
           } catch (_) {
             // if numeric timestamp (seconds) or milliseconds
@@ -101,13 +102,16 @@ class _StaffHistoryState extends State<StaffHistory> {
         });
 
         setState(() {
-          _historyItems =
-              data.map((jsonItem) => HistoryItem.fromJson(jsonItem)).toList();
+          _historyItems = data
+              .map((jsonItem) => HistoryItem.fromJson(jsonItem))
+              .toList();
         });
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load history: ${response.statusCode}')),
+            SnackBar(
+              content: Text('Failed to load history: ${response.statusCode}'),
+            ),
           );
         }
       }
@@ -115,13 +119,46 @@ class _StaffHistoryState extends State<StaffHistory> {
       debugPrint("Error fetching history: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Network error while loading history")));
+          const SnackBar(content: Text("Network error while loading history")),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-// ...existing code...
+
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Confirm Logout"),
+        content: const Text("Are you sure you want to log out?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final storage = FlutterSecureStorage();
+      await storage.delete(key: 'token');
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
+    }
+  }
+
+  // ...existing code...
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
@@ -141,11 +178,7 @@ class _StaffHistoryState extends State<StaffHistory> {
       case 2:
         break;
       case 3:
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const Login()),
-          (route) => false,
-        );
+        _logout();
         break;
     }
   }
@@ -254,9 +287,10 @@ class _StaffHistoryState extends State<StaffHistory> {
       switch (status) {
         case 'Pending':
           return Colors.orange;
-        case 'Rejected':
-        case 'Disable':
+        case 'Rejected' || 'Disable':
           return Colors.red;
+        case 'Approved':
+          return Colors.green;
         case 'Request Return':
           return Colors.purple;
         case 'Borrowed':
@@ -437,7 +471,7 @@ class HistoryItem {
     required this.requestId,
   });
 
-factory HistoryItem.fromJson(Map<String, dynamic> json) {
+  factory HistoryItem.fromJson(Map<String, dynamic> json) {
     String formatDate(dynamic dateStr) {
       if (dateStr == null) return 'N/A';
       try {
@@ -458,7 +492,8 @@ factory HistoryItem.fromJson(Map<String, dynamic> json) {
     final String returnDate = formatDate(json['return_date']);
     final String dateRange = "$borrowDate To $returnDate";
 
-    final String requestStatus = (json['request_status'] ?? 'Unknown').toString();
+    final String requestStatus = (json['request_status'] ?? 'Unknown')
+        .toString();
     final String returnStatus = (json['return_status'] ?? '').toString();
     final String returnedBy = (json['staff_name'] ?? '-').toString();
 
@@ -473,6 +508,10 @@ factory HistoryItem.fromJson(Map<String, dynamic> json) {
       finalStatus = 'Request Return';
     } else if (requestStatus == 'Rejected') {
       finalStatus = 'Rejected';
+    } else if (returnStatus == 'Disable') {
+      finalStatus = 'Disable';
+    } else if (requestStatus == 'Pending') {
+      finalStatus = 'Pending';
     } else {
       finalStatus = requestStatus;
     }

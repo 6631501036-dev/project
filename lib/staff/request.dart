@@ -27,6 +27,8 @@ class _RequestState extends State<Request> {
   int _hoverIndex = -1;
   int _selectedIndex = 0;
   int _notificationCount = 0; // สำหรับนับจำนวนแจ้งเตือน return
+  List<int> hiddenRequestIds = []; // เก็บ ID ของ request ที่ถูกซ่อน
+
   final String baseUrl = "http://$defaultIp:$defaultPort";
 
   // ========== ดึง user_id จาก token ==========
@@ -110,8 +112,9 @@ class _RequestState extends State<Request> {
         final data = json.decode(res.body);
         if (mounted) {
           setState(() {
-            requests = data['requests'] ?? [];
-            isError = false;
+            requests = (data['requests'] ?? [])
+                .where((r) => !hiddenRequestIds.contains(r['id']))
+                .toList();
           });
         }
       } else {
@@ -142,7 +145,10 @@ class _RequestState extends State<Request> {
 
       final res = await http.put(
         Uri.parse("$baseUrl/staff/returnAsset/$requestId"),
-        headers: {"Authorization": "Bearer $token", "Content-Type": "application/json"},
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
         body: jsonEncode({"staff_id": staffId}),
       );
 
@@ -154,6 +160,7 @@ class _RequestState extends State<Request> {
 
         // ✅ ลบแถวเฉพาะ UI
         setState(() {
+          hiddenRequestIds.add(requestId);
           requests.removeWhere((r) => r['id'] == requestId);
 
           // ลด badge แจ้งเตือนถ้าจำนวนมากกว่า 0
@@ -202,6 +209,37 @@ class _RequestState extends State<Request> {
     }
   }
 
+  Future<void> _logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Confirm Logout"),
+        content: const Text("Are you sure you want to log out?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Logout"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final storage = FlutterSecureStorage();
+      await storage.delete(key: 'token');
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const Login()),
+        (route) => false,
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -229,11 +267,7 @@ class _RequestState extends State<Request> {
         );
         break;
       case 3:
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const Login()),
-          (route) => false,
-        );
+        _logout();
         break;
     }
   }
